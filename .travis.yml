@@ -1,0 +1,18 @@
+language: python
+sudo: false
+dist: xenial
+cache: pip
+before_cache:
+  - chown -R travis:travis $HOME/.cache/pip
+stages:
+  - style
+matrix:
+  include:
+    - stage: style
+      python: 3.6
+      install:
+        - pip install -r requirements-dev.txt
+      script:
+        - make check
+notifications:
+  email: false
