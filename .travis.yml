@@ -2,6 +2,8 @@ language: python
 sudo: false
 dist: xenial
 cache: pip
+git:
+  submodules: false
 before_cache:
   - chown -R travis:travis $HOME/.cache/pip
 stages:
