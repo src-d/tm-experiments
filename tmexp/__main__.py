@@ -2,6 +2,7 @@ import argparse
 import logging
 from typing import Any
 
+from .gitbase_constants import COMMENTS, IDENTIFIERS, LITERALS, SUPPORTED_LANGUAGES
 from .preprocess import preprocess
 
 
@@ -26,40 +27,48 @@ def get_parser() -> argparse.ArgumentParser:
         help="Extract the feature count per document and store them as a pickled dict.",
     )
     preprocess_parser.set_defaults(handler=preprocess)
-    input_group = preprocess_parser.add_mutually_exclusive_group(required=True)
-    input_group.add_argument(
-        "-r", "--repo", help="Name of a repo to preprocess.", type=str, default=None
+    preprocess_parser.add_argument(
+        "-r", "--repo", help="Name of the repo to preprocess.", type=str, required=True
     )
-    input_group.add_argument(
-        "--repo-list",
-        help="Filename containing a list of repos to preprocess, one per line.",
+    preprocess_parser.add_argument(
+        "--batch-size",
+        help="Select a batch size for processing files, no batching by default.",
+        type=int,
+        default=0,
+    )
+    preprocess_parser.add_argument(
+        "--batch-dir",
+        help="Temporary directory for saving batches, no saving by default.",
         type=str,
-        default=None,
+        default="",
     )
     preprocess_parser.add_argument(
         "-o",
         "--output",
-        help="Filepath for the output.",
-        default="features.pkl",
+        help="Output path for the pickled dict.",
+        required=True,
         type=str,
     )
-    preprocess_parser.add_argument(
-        "-f",
-        "--force",
-        help="Replace output file if it already exists.",
-        action="store_true",
+    lang_group = preprocess_parser.add_mutually_exclusive_group()
+    lang_group.add_argument(
+        "--select-langs",
+        help="To select a perticular set of languages, defaults to all.",
+        nargs="*",
+        dest="langs",
+        choices=SUPPORTED_LANGUAGES,
+    )
+    lang_group.add_argument(
+        "--exclude-langs",
+        help="To exclude a perticular set of languages, defaults to none.",
+        nargs="*",
+        choices=SUPPORTED_LANGUAGES,
     )
     preprocess_parser.add_argument(
-        "--no-comments",
-        help="To exclude comments from features.",
-        dest="comments",
-        action="store_false",
-    )
-    preprocess_parser.add_argument(
-        "--no-literals",
-        help="To exclude literals from features.",
-        dest="literals",
-        action="store_false",
+        "--features",
+        help="To select which tokens to use as words, defaults to all.",
+        nargs="*",
+        choices=[COMMENTS, IDENTIFIERS, LITERALS],
+        default=[COMMENTS, IDENTIFIERS, LITERALS],
     )
     preprocess_parser.add_argument(
         "--no-tokenize",

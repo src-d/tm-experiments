@@ -22,7 +22,7 @@ setup(
     url="https://github.com/src-d/tm-experiments",
     packages=find_packages(exclude=["tests"]),
     entry_points={"console_scripts": ["tmexp=tmexp.__main__:main"]},
-    install_requires=["nltk==3.4.3", "pymysql==0.9.3", "bblfsh==3.0.4"],
+    install_requires=["nltk==3.4.3", "pymysql==0.9.3", "bblfsh==3.0.4", "tqdm==4.32.2"],
     include_package_data=True,
     license="Apache-2.0",
     classifiers=[
