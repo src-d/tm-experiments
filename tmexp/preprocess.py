@@ -66,29 +66,27 @@ def remove_file(
 
 def preprocess(
     repo: str,
-    output: str,
+    output_path: str,
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
     features: List[str],
     tokenize: bool,
     stem: bool,
-    log_level: str,
     gitbase_host: str,
     gitbase_port: int,
     gitbase_user: str,
     gitbase_pass: str,
     bblfsh_host: str,
     bblfsh_port: int,
+    log_level: str,
 ) -> None:
     logger = logging.getLogger("preprocess")
     logger.addHandler(logging.StreamHandler())
     logger.setLevel(log_level)
 
-    if os.path.exists(output):
-        raise RuntimeError(
-            "File {} already exists, aborting (use force to remove).".format(output)
-        )
-    output_dir = os.path.dirname(output)
+    if os.path.exists(output_path):
+        raise RuntimeError("File {} already exists, aborting.".format(output_path))
+    output_dir = os.path.dirname(output_path)
     if not (output_dir == "" or os.path.exists(output_dir)):
         logger.warn("Creating directory {}.".format(output_dir))
         os.makedirs(output_dir)
@@ -199,7 +197,7 @@ def preprocess(
     for lang in sorted(lang_count):
         logger.info("   {} : {} files.".format(lang, lang_count[lang]))
     output_dict = {"files_info": dict(files_info), "files_content": dict(files_content)}
-    logger.info("Saving features in {} ...".format(output))
-    with open(output, "wb") as _out:
+    logger.info("Saving features in {} ...".format(output_path))
+    with open(output_path, "wb") as _out:
         pickle.dump(output_dict, _out)
     logger.info("Saved features.")

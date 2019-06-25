@@ -2,8 +2,33 @@ import argparse
 import logging
 from typing import Any
 
+from .create_bow import create_bow, DIFF_MODEL, HALL_MODEL
 from .gitbase_constants import COMMENTS, IDENTIFIERS, LITERALS, SUPPORTED_LANGUAGES
 from .preprocess import preprocess
+
+
+def add_feature_lang_args(cmd_parser: argparse.ArgumentParser) -> None:
+    lang_group = cmd_parser.add_mutually_exclusive_group()
+    lang_group.add_argument(
+        "--select-langs",
+        help="To select a perticular set of languages, defaults to all.",
+        nargs="*",
+        dest="langs",
+        choices=SUPPORTED_LANGUAGES,
+    )
+    lang_group.add_argument(
+        "--exclude-langs",
+        help="To exclude a perticular set of languages, defaults to none.",
+        nargs="*",
+        choices=SUPPORTED_LANGUAGES,
+    )
+    cmd_parser.add_argument(
+        "--features",
+        help="To select which tokens to use as words, defaults to all.",
+        nargs="*",
+        choices=[COMMENTS, IDENTIFIERS, LITERALS],
+        default=[COMMENTS, IDENTIFIERS, LITERALS],
+    )
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -24,7 +49,8 @@ def get_parser() -> argparse.ArgumentParser:
 
     preprocess_parser = subparsers.add_parser(
         "preprocess",
-        help="Extract the feature count per document and store them as a pickled dict.",
+        help="Extract the raw feature count per file from all tagged versions of a"
+        "repository and store them as a pickled dict.",
     )
     preprocess_parser.set_defaults(handler=preprocess)
     preprocess_parser.add_argument(
@@ -32,32 +58,12 @@ def get_parser() -> argparse.ArgumentParser:
     )
     preprocess_parser.add_argument(
         "-o",
-        "--output",
+        "--output_path",
         help="Output path for the pickled dict.",
         required=True,
         type=str,
     )
-    lang_group = preprocess_parser.add_mutually_exclusive_group()
-    lang_group.add_argument(
-        "--select-langs",
-        help="To select a perticular set of languages, defaults to all.",
-        nargs="*",
-        dest="langs",
-        choices=SUPPORTED_LANGUAGES,
-    )
-    lang_group.add_argument(
-        "--exclude-langs",
-        help="To exclude a perticular set of languages, defaults to none.",
-        nargs="*",
-        choices=SUPPORTED_LANGUAGES,
-    )
-    preprocess_parser.add_argument(
-        "--features",
-        help="To select which tokens to use as words, defaults to all.",
-        nargs="*",
-        choices=[COMMENTS, IDENTIFIERS, LITERALS],
-        default=[COMMENTS, IDENTIFIERS, LITERALS],
-    )
+    add_feature_lang_args(preprocess_parser)
     preprocess_parser.add_argument(
         "--no-tokenize",
         help="To skip tokenization.",
@@ -84,6 +90,48 @@ def get_parser() -> argparse.ArgumentParser:
     )
     preprocess_parser.add_argument(
         "--bblfsh-port", help="Babelfish port.", type=int, default=9432
+    )
+
+    # ------------------------------------------------------------------------
+
+    create_bow_parser = subparsers.add_parser(
+        "create_bow", help="Create the BoW dataset from a pickled dict, in UCI format."
+    )
+    create_bow_parser.set_defaults(handler=create_bow)
+    create_bow_parser.add_argument(
+        "-i",
+        "--input-path",
+        help="Input path for the pickled dict.",
+        required=True,
+        type=str,
+    )
+    create_bow_parser.add_argument(
+        "-o",
+        "--output-dir",
+        help="Output directory for the BoW files.",
+        required=True,
+        type=str,
+    )
+    create_bow_parser.add_argument(
+        "--dataset-name",
+        help="Name of the dataset, used for filenames, defaults to chosen topic-model.",
+        type=str,
+        default="",
+    )
+    add_feature_lang_args(create_bow_parser)
+    create_bow_parser.add_argument(
+        "--topic-model",
+        help="Topic evolution model to use.",
+        required=True,
+        type=str,
+        choices=[DIFF_MODEL, HALL_MODEL],
+    )
+    tfidf_group = create_bow_parser.add_mutually_exclusive_group()
+    tfidf_group.add_argument(
+        "--thresh", help="To set the threshold for TF-IDF.", default=0.0, type=float
+    )
+    tfidf_group.add_argument(
+        "--no-tfidf", help="To skip TF-IDF.", dest="tfidf", action="store_false"
     )
     return parser
 
