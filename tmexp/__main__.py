@@ -126,13 +126,6 @@ def get_parser() -> argparse.ArgumentParser:
         type=str,
         choices=[DIFF_MODEL, HALL_MODEL],
     )
-    tfidf_group = create_bow_parser.add_mutually_exclusive_group()
-    tfidf_group.add_argument(
-        "--thresh", help="To set the threshold for TF-IDF.", default=0.0, type=float
-    )
-    tfidf_group.add_argument(
-        "--no-tfidf", help="To skip TF-IDF.", dest="tfidf", action="store_false"
-    )
     return parser
 
 
