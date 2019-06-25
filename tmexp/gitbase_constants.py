@@ -19,29 +19,18 @@ WHERE r.repository_id = '{}'
 """
 
 FILE_CONTENT = """
-SELECT t.file_path,
-    t.blob_hash,
-    UAST(
-        t.blob_content,
-        t.lang,
-        ('{}')) as uast
-FROM (
-    SELECT DISTINCT
-        cf.file_path,
-        cf.blob_hash,
-        LANGUAGE(cf.file_path) as lang,
-        f.blob_content
-    FROM repositories r
-        NATURAL JOIN refs rf
-        NATURAL JOIN commit_files cf
-        NATURAL JOIN files f
-    WHERE r.repository_id = '{}'
-        AND is_tag(rf.ref_name)
-        AND lang in ({})
-    ORDER BY cf.file_path, cf.blob_hash
-    LIMIT {}, {}
-) t
-WHERE uast IS NOT NULL;
+SELECT DISTINCT
+    cf.file_path,
+    cf.blob_hash,
+    LANGUAGE(cf.file_path) as lang,
+    f.blob_content
+FROM repositories r
+    NATURAL JOIN refs rf
+    NATURAL JOIN commit_files cf
+    NATURAL JOIN files f
+WHERE r.repository_id = '{}'
+    AND is_tag(rf.ref_name)
+    AND lang in ({})
 """
 
 IDENTIFIERS = "identifiers"

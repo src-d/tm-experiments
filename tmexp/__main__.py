@@ -31,18 +31,6 @@ def get_parser() -> argparse.ArgumentParser:
         "-r", "--repo", help="Name of the repo to preprocess.", type=str, required=True
     )
     preprocess_parser.add_argument(
-        "--batch-size",
-        help="Select a batch size for processing files, no batching by default.",
-        type=int,
-        default=0,
-    )
-    preprocess_parser.add_argument(
-        "--batch-dir",
-        help="Temporary directory for saving batches, no saving by default.",
-        type=str,
-        default="",
-    )
-    preprocess_parser.add_argument(
         "-o",
         "--output",
         help="Output path for the pickled dict.",
@@ -79,11 +67,6 @@ def get_parser() -> argparse.ArgumentParser:
     preprocess_parser.add_argument(
         "--no-stem", help="To skip stemming.", dest="stem", action="store_false"
     )
-    # tfidf_group = preprocess_parser.add_mutually_exclusive_group()
-    # tfidf_group.add_argument("--thresh", help="To set the threshold for TF-IDF.",
-    #                          default=0., type=float)
-    # tfidf_group.add_argument("--no-tfidf", help="To skip TF-IDF.", dest="tfidf",
-    #                          action="store_false")
     preprocess_parser.add_argument(
         "--gitbase-host", help="Gitbase hostname.", type=str, default="0.0.0.0"
     )
@@ -95,6 +78,12 @@ def get_parser() -> argparse.ArgumentParser:
     )
     preprocess_parser.add_argument(
         "--gitbase-pass", help="Gitbase password.", type=str, default=""
+    )
+    preprocess_parser.add_argument(
+        "--bblfsh-host", help="Babelfish hostname.", type=str, default="0.0.0.0"
+    )
+    preprocess_parser.add_argument(
+        "--bblfsh-port", help="Babelfish port.", type=int, default=9432
     )
     return parser
 
