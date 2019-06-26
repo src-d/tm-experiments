@@ -91,7 +91,7 @@ def preprocess(
     )
     logger.info("Processing repository '%s'" % repo)
     logger.info("Retrieving tagged references ...")
-    sql = TAGGED_VERSIONS.format(repo)
+    sql = TAGGED_VERSIONS % repo
     refs = sorted(
         [row["ref_name"].decode() for row in extract(host, port, user, password, sql)]
     )
@@ -100,7 +100,7 @@ def preprocess(
     languages = ",".join(
         "'%s'" % lang for lang in create_language_list(langs, exclude_langs)
     )
-    sql = FILE_INFO.format(repo, languages)
+    sql = FILE_INFO % (repo, languages)
     files_info: Dict[str, Dict[str, Dict[str, str]]] = {ref: {} for ref in refs}
     lang_count: CounterType[str] = Counter()
     seen_files: Set[Tuple[str, str]] = set()
@@ -118,13 +118,13 @@ def preprocess(
         files_info[ref][file_path] = {"blob_hash": blob_hash, "language": lang}
     logger.info("Found %d parsable files:" % raw_count)
     for ref in refs:
-        logger.info("   '%s' : %d files." % ref, len(files_info[ref]))
+        logger.info("   '%s' : %d files." % (ref, len(files_info[ref])))
     logger.info("Found %d distinct parsable files:" % len(seen_files))
     for lang in sorted(lang_count):
-        logger.info("   %s : %d files." % lang, lang_count[lang])
+        logger.info("   %s : %d files." % (lang, lang_count[lang]))
 
     files_content: Dict[str, Dict[str, Any]] = defaultdict(dict)
-    sql = FILE_CONTENT.format(repo, languages)
+    sql = FILE_CONTENT % (repo, languages)
     uast_xpath = " | ".join([FEATURE_MAPPING[feature]["xpath"] for feature in features])
     if stem:
         stemmer = PorterStemmer()
@@ -185,7 +185,7 @@ def preprocess(
         lang_count[lang] += 1
     logger.info("Parsed %d distinct files:" % sum(lang_count.values()))
     for lang in sorted(lang_count):
-        logger.info("   %s : %d files." % lang, lang_count[lang])
+        logger.info("   %s : %d files." % (lang, lang_count[lang]))
     output_dict = {"files_info": dict(files_info), "files_content": dict(files_content)}
     logger.info("Saving features in '%s' ..." % output_path)
     with open(output_path, "wb") as _out:

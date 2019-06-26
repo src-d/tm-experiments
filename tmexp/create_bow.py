@@ -3,7 +3,7 @@ import copy
 import logging
 import os
 import pickle
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 import tqdm
 
@@ -19,6 +19,13 @@ HALL_MODEL = "hall"
 SEP = ":"
 
 
+def check_fraction(fraction: float, arg_name: str) -> None:
+    if not (0 <= fraction <= 1):
+        raise RuntimeError(
+            "Argument '%s' must be in the range [0, 1], aborting." % arg_name
+        )
+
+
 def create_bow(
     input_path: str,
     output_dir: str,
@@ -28,6 +35,8 @@ def create_bow(
     features: List[str],
     force: bool,
     topic_model: str,
+    min_word_frac: float,
+    max_word_frac: float,
     log_level: str,
 ) -> None:
     logger = logging.getLogger("create_bow")
@@ -44,6 +53,8 @@ def create_bow(
     check_remove_file(docword_output_path, logger, force)
     docs_output_path = os.path.join(output_dir, "docs." + dataset_name + ".txt")
     check_remove_file(docs_output_path, logger, force)
+    check_fraction(min_word_frac, "min-word-frac")
+    check_fraction(max_word_frac, "max-word-frac")
 
     logger.info("Reading pickled dict from '%s' ..." % input_path)
     with open(input_path, "rb") as _in:
@@ -52,9 +63,10 @@ def create_bow(
     logger.info("Computing bag of words ...")
     langs = create_language_list(langs, exclude_langs)
     all_refs = sorted([ref for ref in input_dict["files_info"]])
-    vocabulary: Set[str] = set()
-    bow = {}
+    doc_freq: Counter = Counter()
+    bow: Dict[str, Dict[int, Dict[str, Any]]] = {}
     num_docwords = 0
+    num_blobs = 0
     for file_path, blob_dict in tqdm.tqdm(input_dict["files_content"].items()):
         refs = sorted(
             [
@@ -74,7 +86,8 @@ def create_bow(
                     continue
                 word_dict.update(feature_dict[feature])
             if word_dict:
-                vocabulary.update(word_dict)
+                num_blobs += 1
+                doc_freq.update(word_dict.keys())
                 word_counts[blob_hash] = word_dict
         if not word_counts:
             continue
@@ -112,7 +125,10 @@ def create_bow(
                             for word, count in cur_word_counts.items()
                             if count < 0
                         }
-                        prev_word_counts = word_counts[cur_blob]
+                        if cur_blob is None:
+                            prev_word_counts = Counter()
+                        else:
+                            prev_word_counts = word_counts[cur_blob]
                     num_docwords += len(
                         [count for count in cur_word_counts.values() if count != 0]
                     )
@@ -120,8 +136,35 @@ def create_bow(
             prev_ref = ref
         bow[file_path] = file_bows
 
+    if min_word_frac > 0 or max_word_frac < 1:
+        logger.info("Used %d blobs to create documents." % num_blobs)
+        min_word_blob = int(min_word_frac * num_blobs)
+        max_word_blob = int(max_word_frac * num_blobs)
+        logger.info(
+            "Finding words that appear in less then %d blobs or more then %d blobs ..."
+            % (min_word_blob, max_word_blob)
+        )
+        blacklisted_words = set(
+            [
+                word
+                for word, count in doc_freq.items()
+                if count < min_word_blob or count > max_word_blob
+            ]
+        )
+        logger.info("Found %d words. Removing them ..." % len(blacklisted_words))
+        for file_path, file_bows in bow.items():
+            for index, ind_dict in file_bows.items():
+                for suffix, word_dict in ind_dict.items():
+                    if suffix == "refs":
+                        continue
+                    bow[file_path][index][suffix] = {
+                        word: count
+                        for word, count in word_dict.items()
+                        if word not in blacklisted_words
+                    }
+
     logger.info("Creating word index ...")
-    sorted_vocabulary = sorted(vocabulary)
+    sorted_vocabulary = sorted(doc_freq.keys())
     word_index = {word: i for i, word in enumerate(sorted_vocabulary)}
     num_words = len(word_index)
     logger.info("Number of distinct words: %d" % num_words)

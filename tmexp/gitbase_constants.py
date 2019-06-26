@@ -2,7 +2,7 @@ TAGGED_VERSIONS = """
 SELECT rf.ref_name
 FROM repositories r
     NATURAL JOIN refs rf
-WHERE r.repository_id = '{}' AND is_tag(rf.ref_name);
+WHERE r.repository_id = '%s' AND is_tag(rf.ref_name);
 """
 
 FILE_INFO = """
@@ -13,9 +13,9 @@ SELECT rf.ref_name,
 FROM repositories r
     NATURAL JOIN refs rf
     NATURAL JOIN commit_files cf
-WHERE r.repository_id = '{}'
+WHERE r.repository_id = '%s'
     AND is_tag(rf.ref_name)
-    AND lang in ({});
+    AND lang in (%s);
 """
 
 FILE_CONTENT = """
@@ -28,9 +28,9 @@ FROM repositories r
     NATURAL JOIN refs rf
     NATURAL JOIN commit_files cf
     NATURAL JOIN files f
-WHERE r.repository_id = '{}'
+WHERE r.repository_id = '%s'
     AND is_tag(rf.ref_name)
-    AND lang in ({})
+    AND lang in (%s)
 """
 
 IDENTIFIERS = "identifiers"
