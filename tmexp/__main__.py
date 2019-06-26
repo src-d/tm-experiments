@@ -7,7 +7,7 @@ from .gitbase_constants import COMMENTS, IDENTIFIERS, LITERALS, SUPPORTED_LANGUA
 from .preprocess import preprocess
 
 
-def add_feature_lang_args(cmd_parser: argparse.ArgumentParser) -> None:
+def add_lang_args(cmd_parser: argparse.ArgumentParser) -> None:
     lang_group = cmd_parser.add_mutually_exclusive_group()
     lang_group.add_argument(
         "--select-langs",
@@ -22,12 +22,24 @@ def add_feature_lang_args(cmd_parser: argparse.ArgumentParser) -> None:
         nargs="*",
         choices=SUPPORTED_LANGUAGES,
     )
+
+
+def add_feature_arg(cmd_parser: argparse.ArgumentParser) -> None:
     cmd_parser.add_argument(
         "--features",
         help="To select which tokens to use as words, defaults to all.",
         nargs="*",
         choices=[COMMENTS, IDENTIFIERS, LITERALS],
         default=[COMMENTS, IDENTIFIERS, LITERALS],
+    )
+
+
+def add_force_arg(cmd_parser: argparse.ArgumentParser) -> None:
+    cmd_parser.add_argument(
+        "-f",
+        "--force",
+        help="Delete and replace existing output(s).",
+        action="store_true",
     )
 
 
@@ -53,6 +65,9 @@ def get_parser() -> argparse.ArgumentParser:
         "repository and store them as a pickled dict.",
     )
     preprocess_parser.set_defaults(handler=preprocess)
+    add_lang_args(preprocess_parser)
+    add_feature_arg(preprocess_parser)
+    add_force_arg(preprocess_parser)
     preprocess_parser.add_argument(
         "-r", "--repo", help="Name of the repo to preprocess.", type=str, required=True
     )
@@ -63,7 +78,6 @@ def get_parser() -> argparse.ArgumentParser:
         required=True,
         type=str,
     )
-    add_feature_lang_args(preprocess_parser)
     preprocess_parser.add_argument(
         "--no-tokenize",
         help="To skip tokenization.",
@@ -98,6 +112,9 @@ def get_parser() -> argparse.ArgumentParser:
         "create_bow", help="Create the BoW dataset from a pickled dict, in UCI format."
     )
     create_bow_parser.set_defaults(handler=create_bow)
+    add_lang_args(create_bow_parser)
+    add_feature_arg(create_bow_parser)
+    add_force_arg(create_bow_parser)
     create_bow_parser.add_argument(
         "-i",
         "--input-path",
@@ -118,7 +135,6 @@ def get_parser() -> argparse.ArgumentParser:
         type=str,
         default="",
     )
-    add_feature_lang_args(create_bow_parser)
     create_bow_parser.add_argument(
         "--topic-model",
         help="Topic evolution model to use.",

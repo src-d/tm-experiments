@@ -1,12 +1,18 @@
-from collections import Counter, defaultdict
+from collections import Counter
+import copy
 import logging
 import os
 import pickle
-from typing import Any, DefaultDict, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 import tqdm
 
-from .gitbase_constants import SUPPORTED_LANGUAGES
+from .utils import (
+    check_exists,
+    check_remove_file,
+    create_directory,
+    create_language_list,
+)
 
 DIFF_MODEL = "diff"
 HALL_MODEL = "hall"
@@ -20,6 +26,7 @@ def create_bow(
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
     features: List[str],
+    force: bool,
     topic_model: str,
     log_level: str,
 ) -> None:
@@ -27,34 +34,25 @@ def create_bow(
     logger.addHandler(logging.StreamHandler())
     logger.setLevel(log_level)
 
-    if not os.path.exists(input_path):
-        raise RuntimeError("File '%s' does not exists, aborting." % input_path)
-    if not (output_dir == "" or os.path.exists(output_dir)):
-        logger.warn("Creating directory '%s'." % output_dir)
-        os.makedirs(output_dir)
+    check_exists(input_path)
+    create_directory(output_dir, logger)
     if dataset_name == "":
         dataset_name = topic_model
     words_output_path = os.path.join(output_dir, "vocab." + dataset_name + ".txt")
-    if os.path.exists(words_output_path):
-        raise RuntimeError("File '%s' already exists, aborting." % words_output_path)
+    check_remove_file(words_output_path, logger, force)
     docword_output_path = os.path.join(output_dir, "docword." + dataset_name + ".txt")
-    if os.path.exists(docword_output_path):
-        raise RuntimeError("File '%s' already exists, aborting." % docword_output_path)
+    check_remove_file(docword_output_path, logger, force)
     docs_output_path = os.path.join(output_dir, "docs." + dataset_name + ".txt")
-    if os.path.exists(docs_output_path):
-        raise RuntimeError("File '%s' already exists, aborting." % docs_output_path)
+    check_remove_file(docs_output_path, logger, force)
 
     logger.info("Reading pickled dict from '%s' ..." % input_path)
     with open(input_path, "rb") as _in:
         input_dict = pickle.load(_in)
 
     logger.info("Computing bag of words ...")
-    if langs is None:
-        langs = SUPPORTED_LANGUAGES
-        if exclude_langs is not None:
-            langs = [lang for lang in langs if lang not in exclude_langs]
+    langs = create_language_list(langs, exclude_langs)
     all_refs = sorted([ref for ref in input_dict["files_info"]])
-    vocabulary = set()
+    vocabulary: Set[str] = set()
     bow = {}
     num_docwords = 0
     for file_path, blob_dict in tqdm.tqdm(input_dict["files_content"].items()):
@@ -68,33 +66,32 @@ def create_bow(
         lang = input_dict["files_info"][refs[0]][file_path]["language"]
         if lang not in langs:
             continue
-        merged_features = {}
+        word_counts = {}
         for blob_hash, feature_dict in blob_dict.items():
             word_dict: Counter = Counter()
             for feature in features:
                 if feature not in feature_dict:
                     continue
-                for word, count in feature_dict[feature].items():
-                    word_dict[word] += count
-                    vocabulary.add(word)
+                word_dict.update(feature_dict[feature])
             if word_dict:
-                merged_features[blob_hash] = word_dict
-        if not merged_features:
+                vocabulary.update(word_dict)
+                word_counts[blob_hash] = word_dict
+        if not word_counts:
             continue
         file_bows: Dict[int, Dict[str, Any]] = {}
         prev_ref = None
         prev_blob = None
         if topic_model == DIFF_MODEL:
-            prev_features: Counter = Counter()
+            prev_word_counts: Counter = Counter()
         for ref in all_refs:
             if ref in refs:
                 cur_blob = input_dict["files_info"][ref][file_path]["blob_hash"]
-                cur_features = merged_features[cur_blob]
+                cur_word_counts = copy.deepcopy(word_counts[cur_blob])
             else:
                 if prev_ref is None:
                     continue
                 cur_blob = None
-                cur_features = Counter()
+                cur_word_counts = Counter()
             if not (cur_blob is None and topic_model == HALL_MODEL):
                 prev_id = len(file_bows) - 1
                 if prev_blob == cur_blob:
@@ -102,22 +99,23 @@ def create_bow(
                 else:
                     file_bows[prev_id + 1] = {"refs": [ref]}
                     if topic_model == HALL_MODEL:
-                        file_bows[prev_id + 1]["all"] = cur_features
-                        num_docwords += len(cur_features)
+                        file_bows[prev_id + 1]["all"] = cur_word_counts
                     elif topic_model == DIFF_MODEL:
-                        added, removed = {}, {}
-                        words = [word for word in prev_features]
-                        words = list(set(words + [word for word in cur_features]))
-                        for word in words:
-                            diff = cur_features[word] - prev_features[word]
-                            if diff > 0:
-                                added[word] = diff
-                            if diff < 0:
-                                removed[word] = diff
-                        prev_features = cur_features
-                        file_bows[prev_id + 1]["added"] = added
-                        file_bows[prev_id + 1]["removed"] = removed
-                        num_docwords += len(added) + len(removed)
+                        cur_word_counts.subtract(prev_word_counts)
+                        file_bows[prev_id + 1]["added"] = {
+                            word: count
+                            for word, count in cur_word_counts.items()
+                            if count > 0
+                        }
+                        file_bows[prev_id + 1]["removed"] = {
+                            word: -count
+                            for word, count in cur_word_counts.items()
+                            if count < 0
+                        }
+                        prev_word_counts = word_counts[cur_blob]
+                    num_docwords += len(
+                        [count for count in cur_word_counts.values() if count != 0]
+                    )
                     prev_blob = cur_blob
             prev_ref = ref
         bow[file_path] = file_bows
