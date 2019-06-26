@@ -29,7 +29,7 @@ def check_fraction(fraction: float, arg_name: str) -> None:
 def create_bow(
     input_path: str,
     output_dir: str,
-    dataset_name: str,
+    dataset_name: Optional[str],
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
     features: List[str],
@@ -39,13 +39,13 @@ def create_bow(
     max_word_frac: float,
     log_level: str,
 ) -> None:
-    logger = logging.getLogger("create_bow")
+    logger = logging.getLogger(__name__)
     logger.addHandler(logging.StreamHandler())
     logger.setLevel(log_level)
 
     check_exists(input_path)
     create_directory(output_dir, logger)
-    if dataset_name == "":
+    if dataset_name is None:
         dataset_name = topic_model
     words_output_path = os.path.join(output_dir, "vocab." + dataset_name + ".txt")
     check_remove_file(words_output_path, logger, force)
@@ -57,23 +57,21 @@ def create_bow(
     check_fraction(max_word_frac, "max-word-frac")
 
     logger.info("Reading pickled dict from '%s' ..." % input_path)
-    with open(input_path, "rb") as _in:
-        input_dict = pickle.load(_in)
+    with open(input_path, "rb") as fin:
+        input_dict = pickle.load(fin)
 
     logger.info("Computing bag of words ...")
     langs = create_language_list(langs, exclude_langs)
-    all_refs = sorted([ref for ref in input_dict["files_info"]])
+    all_refs = sorted(input_dict["files_info"])
     doc_freq: Counter = Counter()
     bow: Dict[str, Dict[int, Dict[str, Any]]] = {}
     num_docwords = 0
     num_blobs = 0
     for file_path, blob_dict in tqdm.tqdm(input_dict["files_content"].items()):
         refs = sorted(
-            [
-                ref
-                for ref, file_dict in input_dict["files_info"].items()
-                if file_path in file_dict
-            ]
+            ref
+            for ref, file_dict in input_dict["files_info"].items()
+            if file_path in file_dict
         )
         lang = input_dict["files_info"][refs[0]][file_path]["language"]
         if lang not in langs:
@@ -82,9 +80,8 @@ def create_bow(
         for blob_hash, feature_dict in blob_dict.items():
             word_dict: Counter = Counter()
             for feature in features:
-                if feature not in feature_dict:
-                    continue
-                word_dict.update(feature_dict[feature])
+                if feature in feature_dict:
+                    word_dict.update(feature_dict[feature])
             if word_dict:
                 num_blobs += 1
                 doc_freq.update(word_dict.keys())
@@ -129,9 +126,7 @@ def create_bow(
                             prev_word_counts = Counter()
                         else:
                             prev_word_counts = word_counts[cur_blob]
-                    num_docwords += len(
-                        [count for count in cur_word_counts.values() if count != 0]
-                    )
+                    num_docwords += len(+cur_word_counts) + len(-cur_word_counts)
                     prev_blob = cur_blob
             prev_ref = ref
         bow[file_path] = file_bows
@@ -141,16 +136,15 @@ def create_bow(
         min_word_blob = int(min_word_frac * num_blobs)
         max_word_blob = int(max_word_frac * num_blobs)
         logger.info(
-            "Finding words that appear in less then %d blobs or more then %d blobs ..."
-            % (min_word_blob, max_word_blob)
+            "Finding words that appear in less then %d blobs or more then %d blobs ...",
+            min_word_blob,
+            max_word_blob,
         )
-        blacklisted_words = set(
-            [
-                word
-                for word, count in doc_freq.items()
-                if count < min_word_blob or count > max_word_blob
-            ]
-        )
+        blacklisted_words = {
+            word
+            for word, count in doc_freq.items()
+            if count < min_word_blob or count > max_word_blob
+        }
         logger.info("Found %d words. Removing them ..." % len(blacklisted_words))
         for file_path, file_bows in bow.items():
             for index, ind_dict in file_bows.items():
@@ -164,14 +158,14 @@ def create_bow(
                     }
 
     logger.info("Creating word index ...")
-    sorted_vocabulary = sorted(doc_freq.keys())
+    sorted_vocabulary = sorted(doc_freq)
     word_index = {word: i for i, word in enumerate(sorted_vocabulary)}
     num_words = len(word_index)
     logger.info("Number of distinct words: %d" % num_words)
     logger.info("Saving word index ...")
-    with open(words_output_path, "w") as _out:
+    with open(words_output_path, "w") as fout:
         for word in sorted_vocabulary:
-            _out.write(word + "\n")
+            fout.write("%s \n" % word)
     logger.info("Saved word index in '%s'" % words_output_path)
 
     logger.info("Creating document index ...")
@@ -192,10 +186,10 @@ def create_bow(
     num_docs = len(document_index)
     logger.info("Number of distinct documents : %d" % len(document_index))
     logger.info("Saving document index ...")
-    with open(docs_output_path, "w") as _out:
+    with open(docs_output_path, "w") as fout:
         for doc in sorted_docs:
             file_path, ind, suffix = doc.split(SEP)
-            _out.write(" ".join([doc] + bow[file_path][int(ind)]["refs"]) + "\n")
+            fout.write(" ".join([doc] + bow[file_path][int(ind)]["refs"]) + "\n")
     logger.info("Saved document index in '%s'" % docs_output_path)
 
     logger.info(
@@ -203,16 +197,13 @@ def create_bow(
         % (num_docwords / (num_docs * num_words))
     )
     logger.info("Saving bags of words...")
-    with open(docword_output_path, "w") as _out:
+    with open(docword_output_path, "w") as fout:
         for count in [num_docs, num_words, num_docwords]:
-            _out.write(str(count) + "\n")
+            fout.write("%d\n" % count)
         for doc in sorted_docs:
             file_path, ind, suffix = doc.split(SEP)
             for word, count in bow[file_path][int(ind)][suffix].items():
-                _out.write(
-                    " ".join(
-                        [str(document_index[doc]), str(word_index[word]), str(count)]
-                    )
-                    + "\n"
+                fout.write(
+                    "%d %d %d\n" % (document_index[doc], word_index[word], count)
                 )
     logger.info("Saved bags of words in '%s'" % docword_output_path)

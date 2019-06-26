@@ -73,7 +73,7 @@ def get_parser() -> argparse.ArgumentParser:
     )
     preprocess_parser.add_argument(
         "-o",
-        "--output_path",
+        "--output-path",
         help="Output path for the pickled dict.",
         required=True,
         type=str,
@@ -133,7 +133,7 @@ def get_parser() -> argparse.ArgumentParser:
         "--dataset-name",
         help="Name of the dataset, used for filenames, defaults to chosen topic-model.",
         type=str,
-        default="",
+        default=None,
     )
     create_bow_parser.add_argument(
         "--topic-model",

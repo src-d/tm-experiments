@@ -76,7 +76,7 @@ def preprocess(
     bblfsh_port: int,
     log_level: str,
 ) -> None:
-    logger = logging.getLogger("preprocess")
+    logger = logging.getLogger(__name__)
     logger.addHandler(logging.StreamHandler())
     logger.setLevel(log_level)
 
@@ -118,10 +118,10 @@ def preprocess(
         files_info[ref][file_path] = {"blob_hash": blob_hash, "language": lang}
     logger.info("Found %d parsable files:" % raw_count)
     for ref in refs:
-        logger.info("   '%s' : %d files." % (ref, len(files_info[ref])))
+        logger.info("   '%s' : %d files.", ref, len(files_info[ref]))
     logger.info("Found %d distinct parsable files:" % len(seen_files))
     for lang in sorted(lang_count):
-        logger.info("   %s : %d files." % (lang, lang_count[lang]))
+        logger.info("   %s : %d files.", lang, lang_count[lang])
 
     files_content: Dict[str, Dict[str, Any]] = defaultdict(dict)
     sql = FILE_CONTENT % (repo, languages)
@@ -185,9 +185,9 @@ def preprocess(
         lang_count[lang] += 1
     logger.info("Parsed %d distinct files:" % sum(lang_count.values()))
     for lang in sorted(lang_count):
-        logger.info("   %s : %d files." % (lang, lang_count[lang]))
+        logger.info("   %s : %d files.", lang, lang_count[lang])
     output_dict = {"files_info": dict(files_info), "files_content": dict(files_content)}
     logger.info("Saving features in '%s' ..." % output_path)
-    with open(output_path, "wb") as _out:
-        pickle.dump(output_dict, _out)
+    with open(output_path, "wb") as fout:
+        pickle.dump(output_dict, fout)
     logger.info("Saved features.")
