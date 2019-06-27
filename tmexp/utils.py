@@ -1,8 +1,10 @@
 from logging import Logger
 import os
-from typing import List, Optional
+from typing import Counter, List, Optional
 
 from .gitbase_constants import SUPPORTED_LANGUAGES
+
+WordCount = Counter[str]
 
 
 def check_exists(file_path: str) -> None:

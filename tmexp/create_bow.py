@@ -1,9 +1,8 @@
-from collections import Counter
-import copy
+from collections import Counter, defaultdict
 import logging
 import os
 import pickle
-from typing import Any, Dict, List, Optional
+from typing import Any, DefaultDict, Dict, List, Optional, Set
 
 import tqdm
 
@@ -12,11 +11,16 @@ from .utils import (
     check_remove_file,
     create_directory,
     create_language_list,
+    WordCount,
 )
 
 DIFF_MODEL = "diff"
 HALL_MODEL = "hall"
 SEP = ":"
+
+DOC_FILE_NAME = "doc.bow_tm.txt"
+DOCWORD_FILE_NAME = "docword.bow_tm.txt"
+VOCAB_FILE_NAME = "vocab.bow_tm.txt"
 
 
 def check_fraction(fraction: float, arg_name: str) -> None:
@@ -44,15 +48,16 @@ def create_bow(
     logger.setLevel(log_level)
 
     check_exists(input_path)
-    create_directory(output_dir, logger)
     if dataset_name is None:
         dataset_name = topic_model
-    words_output_path = os.path.join(output_dir, "vocab." + dataset_name + ".txt")
+        output_dir = os.path.join(output_dir, dataset_name)
+    create_directory(output_dir, logger)
+    words_output_path = os.path.join(output_dir, VOCAB_FILE_NAME)
     check_remove_file(words_output_path, logger, force)
-    docword_output_path = os.path.join(output_dir, "docword." + dataset_name + ".txt")
+    docword_output_path = os.path.join(output_dir, DOCWORD_FILE_NAME)
     check_remove_file(docword_output_path, logger, force)
-    docs_output_path = os.path.join(output_dir, "docs." + dataset_name + ".txt")
-    check_remove_file(docs_output_path, logger, force)
+    doc_output_path = os.path.join(output_dir, DOC_FILE_NAME)
+    check_remove_file(doc_output_path, logger, force)
     check_fraction(min_word_frac, "min-word-frac")
     check_fraction(max_word_frac, "max-word-frac")
 
@@ -62,77 +67,75 @@ def create_bow(
 
     logger.info("Computing bag of words ...")
     langs = create_language_list(langs, exclude_langs)
-    all_refs = sorted(input_dict["files_info"])
+    bow: DefaultDict[str, List[Dict[Any, int]]] = defaultdict(list)
+    num_bow, num_blobs, num_nnz = 0, 0, 0
     doc_freq: Counter = Counter()
-    bow: Dict[str, Dict[int, Dict[str, Any]]] = {}
-    num_docwords = 0
-    num_blobs = 0
-    for file_path, blob_dict in tqdm.tqdm(input_dict["files_content"].items()):
-        refs = sorted(
-            ref
-            for ref, file_dict in input_dict["files_info"].items()
-            if file_path in file_dict
-        )
-        lang = input_dict["files_info"][refs[0]][file_path]["language"]
-        if lang not in langs:
-            continue
-        word_counts = {}
-        for blob_hash, feature_dict in blob_dict.items():
-            word_dict: Counter = Counter()
-            for feature in features:
-                if feature in feature_dict:
-                    word_dict.update(feature_dict[feature])
-            if word_dict:
-                num_blobs += 1
-                doc_freq.update(word_dict.keys())
-                word_counts[blob_hash] = word_dict
-        if not word_counts:
-            continue
-        file_bows: Dict[int, Dict[str, Any]] = {}
-        prev_ref = None
-        prev_blob = None
+    docs: DefaultDict[str, List[List[str]]] = defaultdict(list)
+    for file_path, blobs in tqdm.tqdm(input_dict["files_content"].items()):
+        previous_blob_hash = None
+        previous_docs: List[str] = []
+        previous_blobs: Set[str] = set()
         if topic_model == DIFF_MODEL:
-            prev_word_counts: Counter = Counter()
-        for ref in all_refs:
-            if ref in refs:
-                cur_blob = input_dict["files_info"][ref][file_path]["blob_hash"]
-                cur_word_counts = copy.deepcopy(word_counts[cur_blob])
-            else:
-                if prev_ref is None:
+            previous_count: WordCount = Counter()
+            doc_added = file_path + SEP + "added"
+            doc_deleted = file_path + SEP + "removed"
+        for ref in sorted(input_dict["files_info"]):
+            if file_path not in input_dict["files_info"][ref]:
+                if topic_model == HALL_MODEL:
                     continue
-                cur_blob = None
-                cur_word_counts = Counter()
-            if not (cur_blob is None and topic_model == HALL_MODEL):
-                prev_id = len(file_bows) - 1
-                if prev_blob == cur_blob:
-                    file_bows[prev_id]["refs"].append(ref)
+                blob_hash = None
+            else:
+                file_info = input_dict["files_info"][ref][file_path]
+                if file_info["language"] not in langs:
+                    break
+                blob_hash = file_info["blob_hash"]
+            if blob_hash == previous_blob_hash:
+                if blob_hash is not None:
+                    for doc_name in previous_docs:
+                        docs[doc_name][-1].append(ref)
+                continue
+            elif blob_hash is None:
+                bow[doc_deleted].append(previous_count)
+                docs[doc_deleted].append([ref])
+                previous_count = Counter()
+                previous_docs = [doc_deleted]
+            else:
+                if blob_hash not in previous_blobs:
+                    previous_blobs.add(blob_hash)
+                    num_blobs += 1
+                blob = blobs[blob_hash]
+                word_counts: WordCount = Counter()
+                for feature in features:
+                    if feature not in blob:
+                        continue
+                    word_counts.update(blob[feature])
+                if not word_counts:
+                    continue
+                doc_freq.update(word_counts.keys())
+                if topic_model == HALL_MODEL:
+                    num_nnz += len(word_counts)
+                    bow[file_path].append(word_counts)
+                    docs[file_path].append([ref])
+                    previous_docs = [file_path]
                 else:
-                    file_bows[prev_id + 1] = {"refs": [ref]}
-                    if topic_model == HALL_MODEL:
-                        file_bows[prev_id + 1]["all"] = cur_word_counts
-                    elif topic_model == DIFF_MODEL:
-                        cur_word_counts.subtract(prev_word_counts)
-                        file_bows[prev_id + 1]["added"] = {
-                            word: count
-                            for word, count in cur_word_counts.items()
-                            if count > 0
-                        }
-                        file_bows[prev_id + 1]["removed"] = {
-                            word: -count
-                            for word, count in cur_word_counts.items()
-                            if count < 0
-                        }
-                        if cur_blob is None:
-                            prev_word_counts = Counter()
-                        else:
-                            prev_word_counts = word_counts[cur_blob]
-                    num_docwords += len(+cur_word_counts) + len(-cur_word_counts)
-                    prev_blob = cur_blob
-            prev_ref = ref
-        bow[file_path] = file_bows
+                    word_counts.subtract(previous_count)
+                    num_nnz += len(+word_counts)
+                    bow[doc_added].append(+word_counts)
+                    docs[doc_added].append([ref])
+                    previous_docs = [doc_added]
+                    if previous_blob_hash is not None:
+                        num_bow += 1
+                        num_nnz += len(-word_counts)
+                        bow[doc_deleted].append(-word_counts)
+                        docs[doc_deleted].append([ref])
+                        previous_docs.append(doc_deleted)
+                    word_counts.update(previous_count)
+                    previous_count = word_counts
+            previous_blob_hash = blob_hash
+            num_bow += 1
 
+    logger.info("Computed %d bags of words from %d blobs.", num_bow, num_blobs)
     if min_word_frac > 0 or max_word_frac < 1:
-        logger.info("Used %d blobs to create documents." % num_blobs)
         min_word_blob = int(min_word_frac * num_blobs)
         max_word_blob = int(max_word_frac * num_blobs)
         logger.info(
@@ -145,65 +148,64 @@ def create_bow(
             for word, count in doc_freq.items()
             if count < min_word_blob or count > max_word_blob
         }
-        logger.info("Found %d words. Removing them ..." % len(blacklisted_words))
-        for file_path, file_bows in bow.items():
-            for index, ind_dict in file_bows.items():
-                for suffix, word_dict in ind_dict.items():
-                    if suffix == "refs":
-                        continue
-                    bow[file_path][index][suffix] = {
-                        word: count
-                        for word, count in word_dict.items()
-                        if word not in blacklisted_words
-                    }
-
+        logger.info("Found %d words." % len(blacklisted_words))
+        logger.info("Pruning BOW...")
+        for doc_name, counts_list in bow.items():
+            bow[doc_name] = [
+                {
+                    word: count
+                    for word, count in word_counts.items()
+                    if word not in blacklisted_words
+                }
+                for word_counts in counts_list
+            ]
+            docs[doc_name] = [
+                ref_list
+                for i, ref_list in enumerate(docs[doc_name])
+                if bow[doc_name][i]
+            ]
+            num_nnz += len(docs[doc_name]) - len(bow[doc_name])
+            bow[doc_name] = [
+                word_counts for word_counts in bow[doc_name] if word_counts
+            ]
     logger.info("Creating word index ...")
-    sorted_vocabulary = sorted(doc_freq)
+    sorted_vocabulary = sorted(
+        word for word in doc_freq if word not in blacklisted_words
+    )
     word_index = {word: i for i, word in enumerate(sorted_vocabulary)}
     num_words = len(word_index)
     logger.info("Number of distinct words: %d" % num_words)
     logger.info("Saving word index ...")
     with open(words_output_path, "w") as fout:
-        for word in sorted_vocabulary:
-            fout.write("%s \n" % word)
+        fout.write("%s\n" % "\n".join(sorted_vocabulary))
     logger.info("Saved word index in '%s'" % words_output_path)
 
-    logger.info("Creating document index ...")
-    if topic_model == HALL_MODEL:
-        suffixes = ["all"]
-    elif topic_model == DIFF_MODEL:
-        suffixes = ["added", "removed"]
-    sorted_docs = sorted(
-        [
-            SEP.join([file_path, str(ind), suffix])
-            for file_path, ind_dict in bow.items()
-            for ind, content in ind_dict.items()
-            for suffix in suffixes
-            if content[suffix]
-        ]
-    )
-    document_index = {doc: i for i, doc in enumerate(sorted_docs)}
-    num_docs = len(document_index)
-    logger.info("Number of distinct documents : %d" % len(document_index))
-    logger.info("Saving document index ...")
-    with open(docs_output_path, "w") as fout:
-        for doc in sorted_docs:
-            file_path, ind, suffix = doc.split(SEP)
-            fout.write(" ".join([doc] + bow[file_path][int(ind)]["refs"]) + "\n")
-    logger.info("Saved document index in '%s'" % docs_output_path)
-
+    logger.info("Creating and saving document index ...")
+    document_index = {}
+    num_docs = 0
+    with open(doc_output_path, "w") as fout:
+        for doc in sorted(docs):
+            for i, refs in enumerate(docs[doc]):
+                doc_name = doc + SEP + str(i)
+                document_index[doc_name] = num_docs
+                num_docs += 1
+                fout.write(" ".join([doc_name] + refs) + "\n")
+    logger.info("Number of distinct documents : %d" % num_docs)
+    logger.info("Saved document index in '%s'" % doc_output_path)
     logger.info(
         "Sparsity of the document word co-occurence matrix : %f"
-        % (num_docwords / (num_docs * num_words))
+        % (num_nnz / (num_docs * num_words))
     )
-    logger.info("Saving bags of words...")
+    logger.info("Saving bags of words ...")
     with open(docword_output_path, "w") as fout:
-        for count in [num_docs, num_words, num_docwords]:
+        for count in [num_docs, num_words, num_nnz]:
             fout.write("%d\n" % count)
-        for doc in sorted_docs:
-            file_path, ind, suffix = doc.split(SEP)
-            for word, count in bow[file_path][int(ind)][suffix].items():
-                fout.write(
-                    "%d %d %d\n" % (document_index[doc], word_index[word], count)
-                )
+        for doc in sorted(docs):
+            for i, words in enumerate(bow[doc]):
+                doc_name = doc + SEP + str(i)
+                for word, count in words.items():
+                    fout.write(
+                        "%d %d %d\n"
+                        % (document_index[doc_name], word_index[word], count)
+                    )
     logger.info("Saved bags of words in '%s'" % docword_output_path)
