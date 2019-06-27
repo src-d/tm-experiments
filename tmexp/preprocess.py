@@ -6,6 +6,7 @@ import re
 from typing import (
     Any,
     Counter as CounterType,
+    DefaultDict,
     Dict,
     Iterator,
     List,
@@ -21,13 +22,8 @@ import pymysql
 import pymysql.cursors
 import tqdm
 
-from .gitbase_constants import (
-    FEATURE_MAPPING,
-    FILE_CONTENT,
-    FILE_INFO,
-    SUPPORTED_LANGUAGES,
-    TAGGED_VERSIONS,
-)
+from .gitbase_constants import FEATURE_MAPPING, FILE_CONTENT, FILE_INFO, TAGGED_REFS
+from .utils import check_remove_file, create_directory, create_language_list
 
 warnings.filterwarnings("ignore")
 
@@ -53,7 +49,7 @@ def extract(
         connection.close()
 
 
-def remove_file(
+def remove_file_from_dict(
     file_path: str, blob_hash: str, files_info: Dict[str, Dict[str, Dict[str, str]]]
 ) -> None:
     for ref in files_info:
@@ -66,32 +62,30 @@ def remove_file(
 
 def preprocess(
     repo: str,
-    output: str,
+    exclude_refs: List[str],
+    only_by_date: bool,
+    version_sep: str,
+    output_path: str,
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
     features: List[str],
+    force: bool,
     tokenize: bool,
     stem: bool,
-    log_level: str,
     gitbase_host: str,
     gitbase_port: int,
     gitbase_user: str,
     gitbase_pass: str,
     bblfsh_host: str,
     bblfsh_port: int,
+    log_level: str,
 ) -> None:
-    logger = logging.getLogger("preprocess")
+    logger = logging.getLogger(__name__)
     logger.addHandler(logging.StreamHandler())
     logger.setLevel(log_level)
 
-    if os.path.exists(output):
-        raise RuntimeError(
-            "File {} already exists, aborting (use force to remove).".format(output)
-        )
-    output_dir = os.path.dirname(output)
-    if not (output_dir == "" or os.path.exists(output_dir)):
-        logger.warn("Creating directory {}.".format(output_dir))
-        os.makedirs(output_dir)
+    check_remove_file(output_path, logger, force)
+    create_directory(os.path.dirname(output_path), logger)
 
     host, port, user, password = (
         gitbase_host,
@@ -99,20 +93,36 @@ def preprocess(
         gitbase_user,
         gitbase_pass,
     )
-    logger.info("Processing repository '{}'".format(repo))
+    logger.info("Processing repository '%s'" % repo)
     logger.info("Retrieving tagged references ...")
-    sql = TAGGED_VERSIONS.format(repo)
-    refs = sorted(
-        [row["ref_name"].decode() for row in extract(host, port, user, password, sql)]
+    sql = TAGGED_REFS % repo
+    refs_dict: DefaultDict[int, DefaultDict[int, List[str]]] = defaultdict(
+        lambda: defaultdict(list)
     )
-    logger.info("Found {} tagged references.".format(len(refs)))
+    refs = [
+        row["ref_name"].decode() for row in extract(host, port, user, password, sql)
+    ]
+    for keyword in exclude_refs:
+        refs = [ref for ref in refs if keyword not in ref]
+    if not only_by_date:
+        for ref in refs:
+            major, minor = [
+                int(re.findall(r"[0-9]+", version)[0])
+                for version in ref.split(version_sep)[:2]
+            ]
+            refs_dict[major][minor].append(ref)
+        refs = [
+            ref
+            for major in sorted(refs_dict)
+            for minor in sorted(refs_dict[major])
+            for ref in refs_dict[major][minor]
+        ]
+    logger.info("Found %d tagged references." % len(refs))
 
-    if langs is None:
-        langs = SUPPORTED_LANGUAGES
-        if exclude_langs is not None:
-            langs = [lang for lang in langs if lang not in exclude_langs]
-    languages = ",".join("'%s'" % lang for lang in langs)
-    sql = FILE_INFO.format(repo, languages)
+    languages = ",".join(
+        "'%s'" % lang for lang in create_language_list(langs, exclude_langs)
+    )
+    sql = FILE_INFO % (repo, ",".join("'%s'" % ref for ref in refs), languages)
     files_info: Dict[str, Dict[str, Dict[str, str]]] = {ref: {} for ref in refs}
     lang_count: CounterType[str] = Counter()
     seen_files: Set[Tuple[str, str]] = set()
@@ -128,15 +138,15 @@ def preprocess(
             lang_count[lang] += 1
             seen_files.add((file_path, blob_hash))
         files_info[ref][file_path] = {"blob_hash": blob_hash, "language": lang}
-    logger.info("Found {} parsable files:".format(raw_count))
+    logger.info("Found %d parsable blobs:" % raw_count)
     for ref in refs:
-        logger.info("   '{}' : {} files.".format(ref, len(files_info[ref])))
-    logger.info("Found {} distinct parsable files:".format(len(seen_files)))
+        logger.info("   '%s' : %d blobs.", ref, len(files_info[ref]))
+    logger.info("Found %d distinct parsable blobs:" % len(seen_files))
     for lang in sorted(lang_count):
-        logger.info("   {} : {} files.".format(lang, lang_count[lang]))
+        logger.info("   %s : %d files.", lang, lang_count[lang])
 
     files_content: Dict[str, Dict[str, Any]] = defaultdict(dict)
-    sql = FILE_CONTENT.format(repo, languages)
+    sql = FILE_CONTENT % (repo, ",".join("'%s'" % ref for ref in refs), languages)
     uast_xpath = " | ".join([FEATURE_MAPPING[feature]["xpath"] for feature in features])
     if stem:
         stemmer = PorterStemmer()
@@ -152,14 +162,14 @@ def preprocess(
         lang = row["lang"].decode()
         contents = row["blob_content"].decode()
         if contents == "":
-            remove_file(file_path, blob_hash, files_info)
+            remove_file_from_dict(file_path, blob_hash, files_info)
             continue
         try:
             ctx = client.parse(
                 filename="", language=lang, contents=contents, timeout=5.0
             )
         except Exception:
-            remove_file(file_path, blob_hash, files_info)
+            remove_file_from_dict(file_path, blob_hash, files_info)
             continue
         word_dict: Dict[str, Counter] = {feature: Counter() for feature in features}
         num_nodes = 0
@@ -186,7 +196,7 @@ def preprocess(
                 word_dict[feature].update(words)
                 break
         if num_nodes == 0:
-            remove_file(file_path, blob_hash, files_info)
+            remove_file_from_dict(file_path, blob_hash, files_info)
             continue
         for feature, word_feature_dict in word_dict.items():
             vocabulary[feature].update(word_feature_dict.keys())
@@ -195,11 +205,15 @@ def preprocess(
             for feature, feature_word_dict in word_dict.items()
         }
         lang_count[lang] += 1
-    logger.info("Parsed {} distinct files:".format(sum(lang_count.values())))
+    logger.info("Parsed %d distinct blobs:" % sum(lang_count.values()))
     for lang in sorted(lang_count):
-        logger.info("   {} : {} files.".format(lang, lang_count[lang]))
-    output_dict = {"files_info": dict(files_info), "files_content": dict(files_content)}
-    logger.info("Saving features in {} ...".format(output))
-    with open(output, "wb") as _out:
-        pickle.dump(output_dict, _out)
+        logger.info("   %s : %d blobs.", lang, lang_count[lang])
+    output_dict = {
+        "files_info": dict(files_info),
+        "files_content": dict(files_content),
+        "refs": refs,
+    }
+    logger.info("Saving features in '%s' ..." % output_path)
+    with open(output_path, "wb") as fout:
+        pickle.dump(output_dict, fout)
     logger.info("Saved features.")
