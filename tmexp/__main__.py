@@ -61,7 +61,7 @@ def get_parser() -> argparse.ArgumentParser:
 
     preprocess_parser = subparsers.add_parser(
         "preprocess",
-        help="Extract the raw feature count per file from all tagged versions of a"
+        help="Extract the raw feature count per file from all tagged refs of a"
         "repository and store them as a pickled dict.",
     )
     preprocess_parser.set_defaults(handler=preprocess)
@@ -70,6 +70,24 @@ def get_parser() -> argparse.ArgumentParser:
     add_force_arg(preprocess_parser)
     preprocess_parser.add_argument(
         "-r", "--repo", help="Name of the repo to preprocess.", type=str, required=True
+    )
+    preprocess_parser.add_argument(
+        "--exclude-refs",
+        help="All refs containing one of these keywords will be excluded "
+        "(e.g. all refs with `alpha`).",
+        nargs="*",
+        default=[],
+    )
+    preprocess_parser.add_argument(
+        "--only-by-date",
+        help="To sort the references only by date (may cause errors).",
+        action="store_true",
+    )
+    preprocess_parser.add_argument(
+        "--version-sep",
+        help="If sorting by version, provide the seperator between major and minor.",
+        type=str,
+        default=".",
     )
     preprocess_parser.add_argument(
         "-o",

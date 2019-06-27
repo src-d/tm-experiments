@@ -6,6 +6,7 @@ import re
 from typing import (
     Any,
     Counter as CounterType,
+    DefaultDict,
     Dict,
     Iterator,
     List,
@@ -21,7 +22,7 @@ import pymysql
 import pymysql.cursors
 import tqdm
 
-from .gitbase_constants import FEATURE_MAPPING, FILE_CONTENT, FILE_INFO, TAGGED_VERSIONS
+from .gitbase_constants import FEATURE_MAPPING, FILE_CONTENT, FILE_INFO, TAGGED_REFS
 from .utils import check_remove_file, create_directory, create_language_list
 
 warnings.filterwarnings("ignore")
@@ -61,6 +62,9 @@ def remove_file_from_dict(
 
 def preprocess(
     repo: str,
+    exclude_refs: List[str],
+    only_by_date: bool,
+    version_sep: str,
     output_path: str,
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
@@ -91,16 +95,34 @@ def preprocess(
     )
     logger.info("Processing repository '%s'" % repo)
     logger.info("Retrieving tagged references ...")
-    sql = TAGGED_VERSIONS % repo
-    refs = sorted(
-        [row["ref_name"].decode() for row in extract(host, port, user, password, sql)]
+    sql = TAGGED_REFS % repo
+    refs_dict: DefaultDict[int, DefaultDict[int, List[str]]] = defaultdict(
+        lambda: defaultdict(list)
     )
+    refs = [
+        row["ref_name"].decode() for row in extract(host, port, user, password, sql)
+    ]
+    for keyword in exclude_refs:
+        refs = [ref for ref in refs if keyword not in ref]
+    if not only_by_date:
+        for ref in refs:
+            major, minor = [
+                int(re.findall(r"[0-9]+", version)[0])
+                for version in ref.split(version_sep)[:2]
+            ]
+            refs_dict[major][minor].append(ref)
+        refs = [
+            ref
+            for major in sorted(refs_dict)
+            for minor in sorted(refs_dict[major])
+            for ref in refs_dict[major][minor]
+        ]
     logger.info("Found %d tagged references." % len(refs))
 
     languages = ",".join(
         "'%s'" % lang for lang in create_language_list(langs, exclude_langs)
     )
-    sql = FILE_INFO % (repo, languages)
+    sql = FILE_INFO % (repo, ",".join("'%s'" % ref for ref in refs), languages)
     files_info: Dict[str, Dict[str, Dict[str, str]]] = {ref: {} for ref in refs}
     lang_count: CounterType[str] = Counter()
     seen_files: Set[Tuple[str, str]] = set()
@@ -116,15 +138,15 @@ def preprocess(
             lang_count[lang] += 1
             seen_files.add((file_path, blob_hash))
         files_info[ref][file_path] = {"blob_hash": blob_hash, "language": lang}
-    logger.info("Found %d parsable files:" % raw_count)
+    logger.info("Found %d parsable blobs:" % raw_count)
     for ref in refs:
-        logger.info("   '%s' : %d files.", ref, len(files_info[ref]))
-    logger.info("Found %d distinct parsable files:" % len(seen_files))
+        logger.info("   '%s' : %d blobs.", ref, len(files_info[ref]))
+    logger.info("Found %d distinct parsable blobs:" % len(seen_files))
     for lang in sorted(lang_count):
         logger.info("   %s : %d files.", lang, lang_count[lang])
 
     files_content: Dict[str, Dict[str, Any]] = defaultdict(dict)
-    sql = FILE_CONTENT % (repo, languages)
+    sql = FILE_CONTENT % (repo, ",".join("'%s'" % ref for ref in refs), languages)
     uast_xpath = " | ".join([FEATURE_MAPPING[feature]["xpath"] for feature in features])
     if stem:
         stemmer = PorterStemmer()
@@ -183,10 +205,14 @@ def preprocess(
             for feature, feature_word_dict in word_dict.items()
         }
         lang_count[lang] += 1
-    logger.info("Parsed %d distinct files:" % sum(lang_count.values()))
+    logger.info("Parsed %d distinct blobs:" % sum(lang_count.values()))
     for lang in sorted(lang_count):
-        logger.info("   %s : %d files.", lang, lang_count[lang])
-    output_dict = {"files_info": dict(files_info), "files_content": dict(files_content)}
+        logger.info("   %s : %d blobs.", lang, lang_count[lang])
+    output_dict = {
+        "files_info": dict(files_info),
+        "files_content": dict(files_content),
+        "refs": refs,
+    }
     logger.info("Saving features in '%s' ..." % output_path)
     with open(output_path, "wb") as fout:
         pickle.dump(output_dict, fout)

@@ -79,7 +79,7 @@ def create_bow(
             previous_count: WordCount = Counter()
             doc_added = file_path + SEP + "added"
             doc_deleted = file_path + SEP + "removed"
-        for ref in sorted(input_dict["files_info"]):
+        for ref in input_dict["refs"]:
             if file_path not in input_dict["files_info"][ref]:
                 if topic_model == HALL_MODEL:
                     continue
