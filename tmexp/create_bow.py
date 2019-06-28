@@ -47,7 +47,7 @@ def create_bow(
     check_exists(input_path)
     if dataset_name is None:
         dataset_name = topic_model
-        output_dir = os.path.join(output_dir, dataset_name)
+    output_dir = os.path.join(output_dir, dataset_name)
     create_directory(output_dir, logger)
     words_output_path = os.path.join(output_dir, VOCAB_FILE_NAME)
     check_remove_file(words_output_path, logger, force)

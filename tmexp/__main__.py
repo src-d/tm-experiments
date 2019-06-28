@@ -3,8 +3,8 @@ import logging
 from typing import Any
 
 from .create_bow import create_bow, DIFF_MODEL, HALL_MODEL
-from .gitbase_constants import COMMENTS, IDENTIFIERS, LITERALS, SUPPORTED_LANGUAGES
-from .preprocess import preprocess
+from .preprocess import COMMENTS, IDENTIFIERS, LITERALS, preprocess
+from .utils import SUPPORTED_LANGUAGES
 
 
 def add_lang_args(cmd_parser: argparse.ArgumentParser) -> None:
@@ -118,12 +118,23 @@ def get_parser() -> argparse.ArgumentParser:
         "--gitbase-pass", help="Gitbase password.", type=str, default=""
     )
     preprocess_parser.add_argument(
+        "--bblfsh-container",
+        help="Name of the Babelfish docker container.",
+        type=str,
+        default="tmexp_bblfshd",
+    )
+    preprocess_parser.add_argument(
         "--bblfsh-host", help="Babelfish hostname.", type=str, default="0.0.0.0"
     )
     preprocess_parser.add_argument(
         "--bblfsh-port", help="Babelfish port.", type=int, default=9432
     )
-
+    preprocess_parser.add_argument(
+        "--bblfsh-timeout",
+        help="Timeout for parse requests made to Babelfish.",
+        type=float,
+        default=10.0,
+    )
     # ------------------------------------------------------------------------
 
     create_bow_parser = subparsers.add_parser(
