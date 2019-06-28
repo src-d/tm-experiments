@@ -1,8 +1,7 @@
 from collections import Counter, defaultdict
-import logging
 import os
 import pickle
-from typing import Any, DefaultDict, Dict, List, Optional, Set
+from typing import Any, Counter as CounterType, DefaultDict, Dict, List, Optional, Set
 
 import tqdm
 
@@ -11,7 +10,7 @@ from .utils import (
     check_remove_file,
     create_directory,
     create_language_list,
-    WordCount,
+    create_logger,
 )
 
 DIFF_MODEL = "diff"
@@ -43,9 +42,7 @@ def create_bow(
     max_word_frac: float,
     log_level: str,
 ) -> None:
-    logger = logging.getLogger(__name__)
-    logger.addHandler(logging.StreamHandler())
-    logger.setLevel(log_level)
+    logger = create_logger(log_level, __name__)
 
     check_exists(input_path)
     if dataset_name is None:
@@ -76,7 +73,7 @@ def create_bow(
         previous_docs: List[str] = []
         previous_blobs: Set[str] = set()
         if topic_model == DIFF_MODEL:
-            previous_count: WordCount = Counter()
+            previous_count: CounterType = Counter()
             doc_added = file_path + SEP + "added"
             doc_deleted = file_path + SEP + "removed"
         for ref in input_dict["refs"]:
@@ -104,7 +101,7 @@ def create_bow(
                     previous_blobs.add(blob_hash)
                     num_blobs += 1
                 blob = blobs[blob_hash]
-                word_counts: WordCount = Counter()
+                word_counts: CounterType = Counter()
                 for feature in features:
                     if feature not in blob:
                         continue
