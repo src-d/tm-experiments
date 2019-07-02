@@ -106,16 +106,24 @@ def get_parser() -> argparse.ArgumentParser:
         "--no-stem", help="To skip stemming.", dest="stem", action="store_false"
     )
     preprocess_parser.add_argument(
-        "--gitbase-host", help="Gitbase hostname.", type=str, default="0.0.0.0"
+        "--gitbase-host",
+        help="Gitbase hostname.",
+        type=str,
+        default="0.0.0.0",
+        dest="host",
     )
     preprocess_parser.add_argument(
-        "--gitbase-port", help="Gitbase port.", type=int, default=3306
+        "--gitbase-port", help="Gitbase port.", type=int, default=3306, dest="port"
     )
     preprocess_parser.add_argument(
-        "--gitbase-user", help="Gitbase user.", type=str, default="root"
+        "--gitbase-user", help="Gitbase user.", type=str, default="root", dest="user"
     )
     preprocess_parser.add_argument(
-        "--gitbase-pass", help="Gitbase password.", type=str, default=""
+        "--gitbase-pass",
+        help="Gitbase password.",
+        type=str,
+        default="",
+        dest="password",
     )
     preprocess_parser.add_argument(
         "--bblfsh-container",

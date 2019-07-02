@@ -74,12 +74,17 @@ def extract(
 
 
 def remove_file_from_dict(
-    file_path: str, blob_hash: str, files_info: Dict[str, Dict[str, Dict[str, str]]]
+    file_path: str,
+    blob_hash: str,
+    files_info: Dict[str, Dict[str, Dict[str, str]]],
+    files_content: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> None:
+    if files_content is not None and file_path in files_content:
+        files_content.pop(file_path)
     for ref in files_info:
-        if (
-            file_path in files_info[ref]
-            and files_info[ref][file_path]["blob_hash"] == blob_hash
+        if file_path in files_info[ref] and (
+            files_content is not None
+            or files_info[ref][file_path]["blob_hash"] == blob_hash
         ):
             files_info[ref].pop(file_path)
 
@@ -96,10 +101,10 @@ def preprocess(
     force: bool,
     tokenize: bool,
     stem: bool,
-    gitbase_host: str,
-    gitbase_port: int,
-    gitbase_user: str,
-    gitbase_pass: str,
+    host: str,
+    port: int,
+    user: str,
+    password: str,
     bblfsh_container: str,
     bblfsh_host: str,
     bblfsh_port: int,
@@ -123,12 +128,6 @@ def preprocess(
     check_remove_file(output_path, logger, force)
     create_directory(os.path.dirname(output_path), logger)
 
-    host, port, user, password = (
-        gitbase_host,
-        gitbase_port,
-        gitbase_user,
-        gitbase_pass,
-    )
     logger.info("Processing repository '%s'" % repo)
     logger.info("Retrieving tagged references ...")
     sql = TAGGED_REFS % repo
@@ -185,8 +184,8 @@ def preprocess(
     sql = FILE_CONTENT % (repo, ",".join("'%s'" % ref for ref in refs), languages)
     if stem:
         stemmer = PorterStemmer()
-    vocabulary: Dict[str, Set[str]] = {feature: set() for feature in features}
-    client = bblfsh.BblfshClient(bblfsh_host + ":" + str(bblfsh_port))
+    blacklisted_files: Set[str] = set()
+    client = bblfsh.BblfshClient("%s:%d" % (bblfsh_host, bblfsh_port))
     parsed_count: CounterType = Counter()
     feature_mapping = {
         xpath: feature_tuple
@@ -200,6 +199,8 @@ def preprocess(
         extract(host, port, user, password, sql), total=len(seen_files)
     ):
         file_path = row["file_path"].decode()
+        if file_path in blacklisted_files:
+            continue
         blob_hash = row["blob_hash"].decode()
         lang = row["lang"].decode()
         contents = row["blob_content"].decode()
@@ -227,10 +228,14 @@ def preprocess(
                     logger.warn("Restarted the container.")
                 uast = None
         if uast is None:
-            remove_file_from_dict(file_path, blob_hash, files_info)
             logger.debug(
-                "Failed to parse '%s' : %s (%s file)", file_path, blob_hash, lang
+                "Failed to parse '%s' : %s (%s file), blacklisting it.",
+                file_path,
+                blob_hash,
+                lang,
             )
+            remove_file_from_dict(file_path, blob_hash, files_info, files_content)
+            blacklisted_files.add(file_path)
             continue
 
         parsed_count[lang] += 1
@@ -254,8 +259,6 @@ def preprocess(
         if num_nodes == 0:
             remove_file_from_dict(file_path, blob_hash, files_info)
             continue
-        for feature, word_feature_dict in word_dict.items():
-            vocabulary[feature].update(word_feature_dict.keys())
         files_content[file_path][blob_hash] = {
             feature: dict(feature_word_dict)
             for feature, feature_word_dict in word_dict.items()

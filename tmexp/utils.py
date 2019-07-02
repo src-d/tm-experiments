@@ -5,6 +5,7 @@ from typing import List, Optional
 
 import tqdm
 
+# TODO: stop hardcoding when https://github.com/bblfsh/client-python/issues/168 is done
 SUPPORTED_LANGUAGES = [
     "C#",
     "C++",
