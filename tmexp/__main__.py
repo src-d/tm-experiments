@@ -173,15 +173,15 @@ def get_parser() -> argparse.ArgumentParser:
     )
     create_bow_parser.add_argument(
         "--min-word-frac",
-        help="Words occuring in less then this percentage of all documents are removed,"
-        " default to 2 %.",
+        help="Words occuring in less then this draction of all documents are removed,"
+        " defaults to %(default)s.",
         type=float,
         default=0.02,
     )
     create_bow_parser.add_argument(
         "--max-word-frac",
-        help="Words occuring in more then this percentage of all documents are removed,"
-        " default to 80 %.",
+        help="Words occuring in more then this fraction of all documents are removed,"
+        " defaults to %(default)s.",
         type=float,
         default=0.8,
     )
