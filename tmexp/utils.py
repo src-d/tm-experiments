@@ -1,10 +1,52 @@
-from logging import Logger
+import logging
+from logging import Handler, Logger, LogRecord, NOTSET
 import os
-from typing import Counter, List, Optional
+from typing import List, Optional
 
-from .gitbase_constants import SUPPORTED_LANGUAGES
+import tqdm
 
-WordCount = Counter[str]
+# TODO: stop hardcoding when https://github.com/bblfsh/client-python/issues/168 is done
+SUPPORTED_LANGUAGES = [
+    "C#",
+    "C++",
+    "C",
+    "Cuda",
+    "OpenCL",
+    "Metal",
+    "Bash",
+    "Shell",
+    "Go",
+    "Java",
+    "JavaScript",
+    "JS",
+    "JSX",
+    "PHP",
+    "Python",
+    "Ruby",
+    "TypeScript",
+]
+
+
+class TqdmLoggingHandler(Handler):
+    def __init__(self, level: int = NOTSET) -> None:
+        super().__init__(level)
+
+    def emit(self, record: LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            tqdm.tqdm.write(msg)
+            self.flush()
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            self.handleError(record)
+
+
+def create_logger(log_level: str, name: str) -> Logger:
+    logger = logging.getLogger(name)
+    logger.setLevel(log_level)
+    logger.addHandler(TqdmLoggingHandler())
+    return logger
 
 
 def check_exists(file_path: str) -> None:

@@ -3,8 +3,8 @@ import logging
 from typing import Any
 
 from .create_bow import create_bow, DIFF_MODEL, HALL_MODEL
-from .gitbase_constants import COMMENTS, IDENTIFIERS, LITERALS, SUPPORTED_LANGUAGES
-from .preprocess import preprocess
+from .preprocess import COMMENTS, IDENTIFIERS, LITERALS, preprocess
+from .utils import SUPPORTED_LANGUAGES
 
 
 def add_lang_args(cmd_parser: argparse.ArgumentParser) -> None:
@@ -106,16 +106,30 @@ def get_parser() -> argparse.ArgumentParser:
         "--no-stem", help="To skip stemming.", dest="stem", action="store_false"
     )
     preprocess_parser.add_argument(
-        "--gitbase-host", help="Gitbase hostname.", type=str, default="0.0.0.0"
+        "--gitbase-host",
+        help="Gitbase hostname.",
+        type=str,
+        default="0.0.0.0",
+        dest="host",
     )
     preprocess_parser.add_argument(
-        "--gitbase-port", help="Gitbase port.", type=int, default=3306
+        "--gitbase-port", help="Gitbase port.", type=int, default=3306, dest="port"
     )
     preprocess_parser.add_argument(
-        "--gitbase-user", help="Gitbase user.", type=str, default="root"
+        "--gitbase-user", help="Gitbase user.", type=str, default="root", dest="user"
     )
     preprocess_parser.add_argument(
-        "--gitbase-pass", help="Gitbase password.", type=str, default=""
+        "--gitbase-pass",
+        help="Gitbase password.",
+        type=str,
+        default="",
+        dest="password",
+    )
+    preprocess_parser.add_argument(
+        "--bblfsh-container",
+        help="Name of the Babelfish docker container.",
+        type=str,
+        default="tmexp_bblfshd",
     )
     preprocess_parser.add_argument(
         "--bblfsh-host", help="Babelfish hostname.", type=str, default="0.0.0.0"
@@ -123,7 +137,12 @@ def get_parser() -> argparse.ArgumentParser:
     preprocess_parser.add_argument(
         "--bblfsh-port", help="Babelfish port.", type=int, default=9432
     )
-
+    preprocess_parser.add_argument(
+        "--bblfsh-timeout",
+        help="Timeout for parse requests made to Babelfish.",
+        type=float,
+        default=10.0,
+    )
     # ------------------------------------------------------------------------
 
     create_bow_parser = subparsers.add_parser(
@@ -162,15 +181,15 @@ def get_parser() -> argparse.ArgumentParser:
     )
     create_bow_parser.add_argument(
         "--min-word-frac",
-        help="Words occuring in less then this percentage of all documents are removed,"
-        " default to 2 %.",
+        help="Words occuring in less then this draction of all documents are removed,"
+        " defaults to %(default)s.",
         type=float,
         default=0.02,
     )
     create_bow_parser.add_argument(
         "--max-word-frac",
-        help="Words occuring in more then this percentage of all documents are removed,"
-        " default to 80 %.",
+        help="Words occuring in more then this fraction of all documents are removed,"
+        " defaults to %(default)s.",
         type=float,
         default=0.8,
     )

@@ -33,43 +33,5 @@ FROM repositories r
 WHERE r.repository_id = '%s'
     AND is_tag(rf.ref_name)
     AND rf.ref_name in (%s)
-    AND lang in (%s)
+    AND lang in (%s);
 """
-
-IDENTIFIERS = "identifiers"
-LITERALS = "literals"
-COMMENTS = "comments"
-
-IDENTIFIER_XPATH = "//uast:Identifier"
-LITERAL_XPATH = "//uast:String"
-COMMENT_XPATH = "//uast:Comment"
-
-IDENTIFIER_KEY = "Name"
-LITERAL_KEY = "Value"
-COMMENT_KEY = "Text"
-
-FEATURE_MAPPING = {
-    IDENTIFIERS: {"xpath": IDENTIFIER_XPATH, "key": IDENTIFIER_KEY},
-    LITERALS: {"xpath": LITERAL_XPATH, "key": LITERAL_KEY},
-    COMMENTS: {"xpath": COMMENT_XPATH, "key": COMMENT_KEY},
-}
-
-SUPPORTED_LANGUAGES = [
-    "C#",
-    "C++",
-    "C",
-    "Cuda",
-    "OpenCL",
-    "Metal",
-    "Bash",
-    "Shell",
-    "Go",
-    "Java",
-    "JavaScript",
-    "JS",
-    "JSX",
-    "PHP",
-    "Python",
-    "Ruby",
-    "TypeScript",
-]
