@@ -166,14 +166,14 @@ def create_bow(
     num_words = len(word_index)
     logger.info("Number of distinct words: %d" % num_words)
     logger.info("Saving word index ...")
-    with open(words_output_path, "w") as fout:
+    with open(words_output_path, "w", encoding="utf-8") as fout:
         fout.write("%s\n" % "\n".join(sorted_vocabulary))
     logger.info("Saved word index in '%s'" % words_output_path)
 
     logger.info("Creating and saving document index ...")
     document_index = {}
     num_docs = 0
-    with open(doc_output_path, "w") as fout:
+    with open(doc_output_path, "w", encoding="utf-8") as fout:
         for doc in sorted(docs):
             for i, refs in enumerate(docs[doc]):
                 doc_name = doc + SEP + str(i)
@@ -190,7 +190,7 @@ def create_bow(
         % (num_nnz / (num_docs * num_words))
     )
     logger.info("Saving bags of words ...")
-    with open(docword_output_path, "w") as fout:
+    with open(docword_output_path, "w", encoding="utf-8") as fout:
         for count in [num_docs, num_words, num_nnz]:
             fout.write("%d\n" % count)
         for doc in sorted(docs):
