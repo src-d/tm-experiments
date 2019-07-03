@@ -32,7 +32,7 @@ def check_fraction(fraction: float, arg_name: str) -> None:
 def create_bow(
     input_path: str,
     output_dir: str,
-    dataset_name: Optional[str],
+    dataset_name: str,
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
     features: List[str],
@@ -45,8 +45,6 @@ def create_bow(
     logger = create_logger(log_level, __name__)
 
     check_exists(input_path)
-    if dataset_name is None:
-        dataset_name = topic_model
     output_dir = os.path.join(output_dir, dataset_name)
     create_directory(output_dir, logger)
     words_output_path = os.path.join(output_dir, VOCAB_FILE_NAME)
