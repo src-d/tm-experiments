@@ -65,7 +65,7 @@ def create_bow(
     logger.info("Computing bag of words ...")
     langs = create_language_list(langs, exclude_langs)
     bow: DefaultDict[str, List[Dict[Any, int]]] = defaultdict(list)
-    num_bow, num_blobs, num_nnz = 0, 0, 0
+    num_bow, num_blobs = 0, 0
     doc_freq: Counter = Counter()
     docs: DefaultDict[str, List[List[str]]] = defaultdict(list)
     for file_path, blobs in tqdm.tqdm(input_dict["files_content"].items()):
@@ -110,27 +110,23 @@ def create_bow(
                     continue
                 doc_freq.update(word_counts.keys())
                 if topic_model == HALL_MODEL:
-                    num_nnz += len(word_counts)
                     bow[file_path].append(word_counts)
                     docs[file_path].append([ref])
                     previous_docs = [file_path]
                 else:
                     word_counts.subtract(previous_count)
-                    num_nnz += len(+word_counts)
                     bow[doc_added].append(+word_counts)
                     docs[doc_added].append([ref])
                     previous_docs = [doc_added]
                     if previous_blob_hash is not None:
                         num_bow += 1
-                        num_nnz += len(-word_counts)
                         bow[doc_deleted].append(-word_counts)
                         docs[doc_deleted].append([ref])
                         previous_docs.append(doc_deleted)
                     word_counts.update(previous_count)
-                    previous_count = word_counts
+                    previous_count = +word_counts
             previous_blob_hash = blob_hash
             num_bow += 1
-
     logger.info("Computed %d bags of words from %d blobs.", num_bow, num_blobs)
     if min_word_frac > 0 or max_word_frac < 1:
         min_word_blob = int(min_word_frac * num_blobs)
@@ -161,7 +157,6 @@ def create_bow(
                 for i, ref_list in enumerate(docs[doc_name])
                 if bow[doc_name][i]
             ]
-            num_nnz += len(docs[doc_name]) - len(bow[doc_name])
             bow[doc_name] = [
                 word_counts for word_counts in bow[doc_name] if word_counts
             ]
@@ -189,8 +184,11 @@ def create_bow(
                 fout.write(" ".join([doc_name] + refs) + "\n")
     logger.info("Number of distinct documents : %d" % num_docs)
     logger.info("Saved document index in '%s'" % doc_output_path)
+
+    num_nnz = sum(len(wc) for word_counts in bow.values() for wc in word_counts)
+    logger.info("Number of document-word pairs: %d" % num_nnz)
     logger.info(
-        "Sparsity of the document word co-occurence matrix : %f"
+        "Sparsity of the document-word co-occurence matrix : %f"
         % (num_nnz / (num_docs * num_words))
     )
     logger.info("Saving bags of words ...")
