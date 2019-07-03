@@ -4,6 +4,7 @@ from typing import Any
 
 from .create_bow import create_bow, DIFF_MODEL, HALL_MODEL
 from .preprocess import COMMENTS, IDENTIFIERS, LITERALS, preprocess
+from .train_hdp import train_hdp
 from .utils import SUPPORTED_LANGUAGES
 
 
@@ -40,6 +41,15 @@ def add_force_arg(cmd_parser: argparse.ArgumentParser) -> None:
         "--force",
         help="Delete and replace existing output(s).",
         action="store_true",
+    )
+
+
+def add_dataset_arg(cmd_parser: argparse.ArgumentParser) -> None:
+    cmd_parser.add_argument(
+        "--dataset-name",
+        help="Name of the dataset, used as the second level input/output directory.",
+        type=str,
+        required=True,
     )
 
 
@@ -152,6 +162,7 @@ def get_parser() -> argparse.ArgumentParser:
     add_lang_args(create_bow_parser)
     add_feature_arg(create_bow_parser)
     add_force_arg(create_bow_parser)
+    add_dataset_arg(create_bow_parser)
     create_bow_parser.add_argument(
         "-i",
         "--input-path",
@@ -162,15 +173,9 @@ def get_parser() -> argparse.ArgumentParser:
     create_bow_parser.add_argument(
         "-o",
         "--output-dir",
-        help="Output directory for the BoW files.",
+        help="First level output directory for the BoW files.",
         required=True,
         type=str,
-    )
-    create_bow_parser.add_argument(
-        "--dataset-name",
-        help="Name of the dataset, used for filenames, defaults to chosen topic-model.",
-        type=str,
-        default=None,
     )
     create_bow_parser.add_argument(
         "--topic-model",
@@ -193,6 +198,80 @@ def get_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.8,
     )
+    # ------------------------------------------------------------------------
+
+    train_hdp_parser = subparsers.add_parser(
+        "train_hdp", help="Train an HDP model from the input BoW."
+    )
+    train_hdp_parser.set_defaults(handler=train_hdp)
+    add_force_arg(train_hdp_parser)
+    add_dataset_arg(train_hdp_parser)
+    train_hdp_parser.add_argument(
+        "-i",
+        "--input-dir",
+        help="First level input directory for the BoW files.",
+        required=True,
+        type=str,
+    )
+    train_hdp_parser.add_argument(
+        "-o",
+        "--output-dir",
+        help="First level output directory for the word-topic and document-topic"
+        " distributions.",
+        required=True,
+        type=str,
+    )
+    train_hdp_parser.add_argument(
+        "--chunk-size", help="Number of documents in one chunk.", default=256, type=int
+    )
+    train_hdp_parser.add_argument(
+        "--kappa",
+        help="Learning parameter which acts as exponential decay factor to influence "
+        "extent of learning from each batch.",
+        default=1.0,
+        type=float,
+    )
+    train_hdp_parser.add_argument(
+        "--tau",
+        help="Learning parameter which down-weights early iterations of documents.",
+        default=64.0,
+        type=float,
+    )
+    train_hdp_parser.add_argument(
+        "--K", help="Document level truncation level.", default=15, type=int
+    )
+    train_hdp_parser.add_argument(
+        "--T", help="Topic level truncation level.", default=150, type=int
+    )
+    train_hdp_parser.add_argument(
+        "--alpha", help="Document level concentration.", default=1, type=int
+    )
+    train_hdp_parser.add_argument(
+        "--gamma", help="Topic level concentration.", default=1, type=int
+    )
+    train_hdp_parser.add_argument(
+        "--eta", help="Topic Dirichlet.", default=0.01, type=float
+    )
+    train_hdp_parser.add_argument(
+        "--scale",
+        help="Weights information from the mini-chunk of corpus to calculate rhot.",
+        default=1.0,
+        type=float,
+    )
+    train_hdp_parser.add_argument(
+        "--var-converge",
+        help="Lower bound on the right side of convergence.",
+        default=0.0001,
+        type=float,
+    )
+    train_hdp_parser.add_argument(
+        "--min-proba",
+        help="Lower bound on the probability a topic is affected to a document, "
+        "defaults to %(default)s.",
+        default=0.01,
+        type=float,
+    )
+
     return parser
 
 
