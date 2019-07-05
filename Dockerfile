@@ -2,10 +2,12 @@ FROM ubuntu:18.04
 
 RUN mkdir /data
 
-ENV FEATURE_DIR=/data/features \
-    BOW_DIR=/data/bow \
-    TOPICS_DIR=/data/topics \
-    VIZ_DIR=/data/visualisations
+ENV BBLFSH_HOSTNAME=tmexp_bblfshd \
+  BBLFSH_PORT=9432 \
+  GITBASE_HOSTNAME=gitbase \
+  GITBASE_PORT=3306 \
+  GITBASE_USERNAME=root \
+  GITBASE_PASSWORD=
 
 RUN apt-get update \
   && apt-get install -y dialog apt-utils curl \
@@ -19,16 +21,18 @@ RUN apt-get update \
   && cd /usr/local/bin \
   && ln -s /usr/bin/python3 python \
   && apt-get remove -y .*-doc .*-man >/dev/null \
-  && apt-get autoremove -y \ 
+  && apt-get autoremove --purge -y \ 
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
 
 COPY requirements.txt package/
+
+RUN pip3 install --no-cache-dir -r package/requirements.txt
+
 COPY setup.py package/
 COPY README.md package/
 COPY tmexp package/tmexp/
 
-RUN pip3 install --no-cache-dir -r package/requirements.txt
 RUN pip3 install --no-cache-dir  package/.
 ENTRYPOINT ["tmexp"]
