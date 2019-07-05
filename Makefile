@@ -34,7 +34,7 @@ gitbase-start:
 			--link $(BBLFSHD_NAME):$(BBLFSHD_NAME) \
 			--env BBLFSH_ENDPOINT=$(BBLFSHD_NAME):$(BBLFSHD_PORT) \
 			--volume $(RESOLVED_REPOS):/opt/repos \
-			srcd/gitbase:v0.21.0;\
+			srcd/gitbase:v0.22.0;\
 	fi
 
 .PHONY: check start bblfsh-start gitbase-start

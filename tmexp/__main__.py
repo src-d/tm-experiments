@@ -102,9 +102,9 @@ def get_parser() -> argparse.ArgumentParser:
     preprocess_parser.add_argument(
         "-o",
         "--output-path",
-        help="Output path for the pickled dict.",
-        required=True,
+        help="Output path for the pickled dict, defaults to FEATURE_DIR/features.pkl.",
         type=str,
+        default=None,
     )
     preprocess_parser.add_argument(
         "--no-tokenize",
@@ -119,7 +119,7 @@ def get_parser() -> argparse.ArgumentParser:
         "--gitbase-host",
         help="Gitbase hostname.",
         type=str,
-        default="0.0.0.0",
+        default="gitbase",
         dest="host",
     )
     preprocess_parser.add_argument(
@@ -136,13 +136,7 @@ def get_parser() -> argparse.ArgumentParser:
         dest="password",
     )
     preprocess_parser.add_argument(
-        "--bblfsh-container",
-        help="Name of the Babelfish docker container.",
-        type=str,
-        default="tmexp_bblfshd",
-    )
-    preprocess_parser.add_argument(
-        "--bblfsh-host", help="Babelfish hostname.", type=str, default="0.0.0.0"
+        "--bblfsh-host", help="Babelfish hostname.", type=str, default="tmexp_bblfshd"
     )
     preprocess_parser.add_argument(
         "--bblfsh-port", help="Babelfish port.", type=int, default=9432
@@ -166,16 +160,16 @@ def get_parser() -> argparse.ArgumentParser:
     create_bow_parser.add_argument(
         "-i",
         "--input-path",
-        help="Input path for the pickled dict.",
-        required=True,
+        help="Input path for the pickled dict, defaults to FEATURE_DIR/features.pkl.",
         type=str,
+        default=None,
     )
     create_bow_parser.add_argument(
         "-o",
         "--output-dir",
-        help="First level output directory for the BoW files.",
-        required=True,
+        help="First level output directory for the BoW files, defaults to BOW_DIR.",
         type=str,
+        default=None,
     )
     create_bow_parser.add_argument(
         "--topic-model",
@@ -209,16 +203,23 @@ def get_parser() -> argparse.ArgumentParser:
     train_hdp_parser.add_argument(
         "-i",
         "--input-dir",
-        help="First level input directory for the BoW files.",
-        required=True,
+        help="First level input directory for the BoW files, defaults to BOW_DIR.",
+        default=None,
         type=str,
     )
     train_hdp_parser.add_argument(
         "-o",
         "--output-dir",
         help="First level output directory for the word-topic and document-topic"
-        " distributions.",
-        required=True,
+        " distributions, defaults to TOPIC_DIR.",
+        default=None,
+        type=str,
+    )
+    train_hdp_parser.add_argument(
+        "--exp-name",
+        help="Name of the experiment, defaults to 'experiment_i' where i is the number "
+        "of other experiments for this dataset.",
+        default=None,
         type=str,
     )
     train_hdp_parser.add_argument(

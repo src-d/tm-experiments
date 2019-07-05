@@ -6,11 +6,15 @@ from typing import Any, Counter as CounterType, DefaultDict, Dict, List, Optiona
 import tqdm
 
 from .utils import (
-    check_exists,
+    BOW_DIR,
+    check_env_exists,
+    check_file_exists,
     check_remove_file,
     create_directory,
     create_language_list,
     create_logger,
+    FEATURE_DEFAULT_FILENAME,
+    FEATURE_DIR,
 )
 
 DIFF_MODEL = "diff"
@@ -30,8 +34,8 @@ def check_fraction(fraction: float, arg_name: str) -> None:
 
 
 def create_bow(
-    input_path: str,
-    output_dir: str,
+    input_path: Optional[str],
+    output_dir: Optional[str],
     dataset_name: str,
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
@@ -44,7 +48,14 @@ def create_bow(
 ) -> None:
     logger = create_logger(log_level, __name__)
 
-    check_exists(input_path)
+    if input_path is None:
+        input_path = check_env_exists(FEATURE_DIR, "input-path")
+        input_path = os.path.join(input_path, FEATURE_DEFAULT_FILENAME)
+        logger.info("Using default filename for input.")
+    check_file_exists(input_path)
+
+    if output_dir is None:
+        output_dir = check_env_exists(BOW_DIR, "output-dir")
     output_dir = os.path.join(output_dir, dataset_name)
     create_directory(output_dir, logger)
     words_output_path = os.path.join(output_dir, VOCAB_FILE_NAME)
@@ -53,6 +64,7 @@ def create_bow(
     check_remove_file(docword_output_path, logger, force)
     doc_output_path = os.path.join(output_dir, DOC_FILE_NAME)
     check_remove_file(doc_output_path, logger, force)
+
     check_fraction(min_word_frac, "min-word-frac")
     check_fraction(max_word_frac, "max-word-frac")
 

@@ -25,10 +25,13 @@ import tqdm
 
 from .gitbase_queries import FILE_CONTENT, FILE_INFO, TAGGED_REFS
 from .utils import (
+    check_env_exists,
     check_remove_file,
     create_directory,
     create_language_list,
     create_logger,
+    FEATURE_DEFAULT_FILENAME,
+    FEATURE_DIR,
 )
 
 warnings.filterwarnings("ignore")
@@ -94,7 +97,7 @@ def preprocess(
     exclude_refs: List[str],
     only_by_date: bool,
     version_sep: str,
-    output_path: str,
+    output_path: Optional[str],
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
     features: List[str],
@@ -105,7 +108,6 @@ def preprocess(
     port: int,
     user: str,
     password: str,
-    bblfsh_container: str,
     bblfsh_host: str,
     bblfsh_port: int,
     bblfsh_timeout: float,
@@ -125,6 +127,11 @@ def preprocess(
                 yield from feature_extractor(uast)
 
     logger = create_logger(log_level, __name__)
+
+    if output_path is None:
+        output_path = check_env_exists(FEATURE_DIR, "output-path")
+        output_path = os.path.join(FEATURE_DIR, FEATURE_DEFAULT_FILENAME)
+        logger.info("Using default filename for output.")
     check_remove_file(output_path, logger, force)
     create_directory(os.path.dirname(output_path), logger)
 
@@ -221,7 +228,7 @@ def preprocess(
                 if time.time() - start > bblfsh_timeout - 0.1 and attempt == 0:
                     logger.warn("Babelfish timed out, restarting the container ...")
                     subprocess.call(
-                        ["docker", "restart", bblfsh_container],
+                        ["docker", "restart", bblfsh_host],
                         stdout=open(subprocess.DEVNULL, "wb"),
                     )
                     time.sleep(10)

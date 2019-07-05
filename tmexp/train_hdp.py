@@ -1,12 +1,20 @@
 import os
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import gensim
 import numpy as np
 import tqdm
 
 from .create_bow import DOCWORD_FILE_NAME, VOCAB_FILE_NAME
-from .utils import check_exists, check_remove_file, create_directory, create_logger
+from .utils import (
+    BOW_DIR,
+    check_env_exists,
+    check_file_exists,
+    check_remove_file,
+    create_directory,
+    create_logger,
+    TOPICS_DIR,
+)
 
 
 DOCTOPIC_FILE_NAME = "doc.topic.txt"
@@ -14,9 +22,10 @@ WORDTOPIC_FILENAME = "word.topic.npy"
 
 
 def train_hdp(
-    input_dir: str,
-    output_dir: str,
+    input_dir: Optional[str],
+    output_dir: Optional[str],
     dataset_name: str,
+    exp_name: Optional[str],
     force: bool,
     chunk_size: int,
     kappa: float,
@@ -33,12 +42,20 @@ def train_hdp(
 ) -> None:
     logger = create_logger(log_level, __name__)
 
+    if input_dir is None:
+        input_dir = check_env_exists(BOW_DIR, "input-dir")
     input_dir = os.path.join(input_dir, dataset_name)
-    output_dir = os.path.join(output_dir, dataset_name)
     words_input_path = os.path.join(input_dir, VOCAB_FILE_NAME)
-    check_exists(words_input_path)
+    check_file_exists(words_input_path)
     docword_input_path = os.path.join(input_dir, DOCWORD_FILE_NAME)
-    check_exists(docword_input_path)
+    check_file_exists(docword_input_path)
+
+    if output_dir is None:
+        output_dir = check_env_exists(TOPICS_DIR, "output-dir")
+    output_dir = os.path.join(output_dir, dataset_name)
+    if exp_name is None:
+        exp_name = "experiment_%d" % (len(os.listdir(output_dir)) + 1)
+    output_dir = os.path.join(output_dir, exp_name)
     doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILE_NAME)
     check_remove_file(doctopic_output_path, logger, force)
     wordtopic_output_path = os.path.join(output_dir, WORDTOPIC_FILENAME)

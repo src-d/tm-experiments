@@ -26,6 +26,12 @@ SUPPORTED_LANGUAGES = [
     "TypeScript",
 ]
 
+FEATURE_DIR = "FEATURE_DIR"
+FEATURE_DEFAULT_FILENAME = "features.pkl"
+BOW_DIR = "BOW_DIR"
+TOPICS_DIR = "TOPICS_DIR"
+VIZ_DIR = "VIZ_DIR"
+
 
 class TqdmLoggingHandler(Handler):
     def __init__(self, level: int = NOTSET) -> None:
@@ -49,9 +55,18 @@ def create_logger(log_level: str, name: str) -> Logger:
     return logger
 
 
-def check_exists(file_path: str) -> None:
+def check_file_exists(file_path: str) -> None:
     if not os.path.exists(file_path):
         raise RuntimeError("File '%s' does not exists, aborting." % file_path)
+
+
+def check_env_exists(env_name: str, arg_name: str) -> str:
+    if env_name not in os.environ:
+        raise RuntimeError(
+            "Variable '%s' does not exists, aborting (either create it or"
+            "specify argument '%s')." % (env_name, arg_name)
+        )
+    return os.environ[env_name]
 
 
 def check_remove_file(file_path: str, logger: Logger, force: bool) -> None:
