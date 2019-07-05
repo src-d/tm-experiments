@@ -1,6 +1,7 @@
 import logging
 from logging import Handler, Logger, LogRecord, NOTSET
 import os
+import time
 from typing import List, Optional
 
 import tqdm
@@ -26,11 +27,18 @@ SUPPORTED_LANGUAGES = [
     "TypeScript",
 ]
 
-FEATURE_DIR = "FEATURE_DIR"
-FEATURE_DEFAULT_FILENAME = "features.pkl"
-BOW_DIR = "BOW_DIR"
-TOPICS_DIR = "TOPICS_DIR"
-VIZ_DIR = "VIZ_DIR"
+DATASET_DIR = "/data/datasets"
+
+BOW_DIR = "/data/bows"
+DOC_FILE_NAME = "doc.bow_tm.txt"
+DOCWORD_FILE_NAME = "docword.bow_tm.txt"
+VOCAB_FILE_NAME = "vocab.bow_tm.txt"
+
+TOPICS_DIR = "/data/topics"
+DOCTOPIC_FILE_NAME = "doc.topic.txt"
+WORDTOPIC_FILENAME = "word.topic.npy"
+
+VIZ_DIR = "/data/visualisations"
 
 
 class TqdmLoggingHandler(Handler):
@@ -55,17 +63,21 @@ def create_logger(log_level: str, name: str) -> Logger:
     return logger
 
 
+def check_create_default(name: Optional[str], out_type: str, logger: Logger) -> str:
+    if name is None:
+        name = "%s-%s" % (time.strftime("%m-%d-%H:%M"), out_type)
+        logger.info("Created default %s name: '%s'", out_type, name)
+    return name
+
+
 def check_file_exists(file_path: str) -> None:
     if not os.path.exists(file_path):
-        raise RuntimeError("File '%s' does not exists, aborting." % file_path)
+        raise FileNotFoundError("File '%s' does not exists, aborting." % file_path)
 
 
-def check_env_exists(env_name: str, arg_name: str) -> str:
+def check_env_exists(env_name: str) -> str:
     if env_name not in os.environ:
-        raise RuntimeError(
-            "Variable '%s' does not exists, aborting (either create it or"
-            "specify argument '%s')." % (env_name, arg_name)
-        )
+        raise RuntimeError("Variable '%s' does not exists, aborting." % env_name)
     return os.environ[env_name]
 
 

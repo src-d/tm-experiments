@@ -7,23 +7,21 @@ import tqdm
 
 from .utils import (
     BOW_DIR,
-    check_env_exists,
+    check_create_default,
     check_file_exists,
     check_remove_file,
     create_directory,
     create_language_list,
     create_logger,
-    FEATURE_DEFAULT_FILENAME,
-    FEATURE_DIR,
+    DATASET_DIR,
+    DOC_FILE_NAME,
+    DOCWORD_FILE_NAME,
+    VOCAB_FILE_NAME,
 )
 
 DIFF_MODEL = "diff"
 HALL_MODEL = "hall"
 SEP = ":"
-
-DOC_FILE_NAME = "doc.bow_tm.txt"
-DOCWORD_FILE_NAME = "docword.bow_tm.txt"
-VOCAB_FILE_NAME = "vocab.bow_tm.txt"
 
 
 def check_fraction(fraction: float, arg_name: str) -> None:
@@ -34,9 +32,8 @@ def check_fraction(fraction: float, arg_name: str) -> None:
 
 
 def create_bow(
-    input_path: Optional[str],
-    output_dir: Optional[str],
-    dataset_name: str,
+    dataset_name: Optional[str],
+    bow_name: Optional[str],
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
     features: List[str],
@@ -48,15 +45,13 @@ def create_bow(
 ) -> None:
     logger = create_logger(log_level, __name__)
 
-    if input_path is None:
-        input_path = check_env_exists(FEATURE_DIR, "input-path")
-        input_path = os.path.join(input_path, FEATURE_DEFAULT_FILENAME)
-        logger.info("Using default filename for input.")
+    if dataset_name is None:
+        raise RuntimeError("Dataset name not specified, aborting.")
+    input_path = os.path.join(DATASET_DIR, dataset_name + ".pkl")
     check_file_exists(input_path)
 
-    if output_dir is None:
-        output_dir = check_env_exists(BOW_DIR, "output-dir")
-    output_dir = os.path.join(output_dir, dataset_name)
+    bow_name = check_create_default(bow_name, "bow", logger)
+    output_dir = os.path.join(BOW_DIR, bow_name)
     create_directory(output_dir, logger)
     words_output_path = os.path.join(output_dir, VOCAB_FILE_NAME)
     check_remove_file(words_output_path, logger, force)

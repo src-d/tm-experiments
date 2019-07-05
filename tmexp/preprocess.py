@@ -25,13 +25,13 @@ import tqdm
 
 from .gitbase_queries import FILE_CONTENT, FILE_INFO, TAGGED_REFS
 from .utils import (
+    check_create_default,
     check_env_exists,
     check_remove_file,
     create_directory,
     create_language_list,
     create_logger,
-    FEATURE_DEFAULT_FILENAME,
-    FEATURE_DIR,
+    DATASET_DIR,
 )
 
 warnings.filterwarnings("ignore")
@@ -55,6 +55,22 @@ FEATURE_MAPPING = {
 }
 
 
+def remove_file_from_dict(
+    file_path: str,
+    blob_hash: str,
+    files_info: Dict[str, Dict[str, Dict[str, str]]],
+    files_content: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> None:
+    if files_content is not None and file_path in files_content:
+        files_content.pop(file_path)
+    for ref in files_info:
+        if file_path in files_info[ref] and (
+            files_content is not None
+            or files_info[ref][file_path]["blob_hash"] == blob_hash
+        ):
+            files_info[ref].pop(file_path)
+
+
 def extract(
     host: str, port: int, user: str, password: str, sql: str
 ) -> Iterator[Dict[str, Any]]:
@@ -76,40 +92,18 @@ def extract(
         connection.close()
 
 
-def remove_file_from_dict(
-    file_path: str,
-    blob_hash: str,
-    files_info: Dict[str, Dict[str, Dict[str, str]]],
-    files_content: Optional[Dict[str, Dict[str, Any]]] = None,
-) -> None:
-    if files_content is not None and file_path in files_content:
-        files_content.pop(file_path)
-    for ref in files_info:
-        if file_path in files_info[ref] and (
-            files_content is not None
-            or files_info[ref][file_path]["blob_hash"] == blob_hash
-        ):
-            files_info[ref].pop(file_path)
-
-
 def preprocess(
     repo: str,
+    dataset_name: Optional[str],
     exclude_refs: List[str],
     only_by_date: bool,
     version_sep: str,
-    output_path: Optional[str],
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
     features: List[str],
     force: bool,
     tokenize: bool,
     stem: bool,
-    host: str,
-    port: int,
-    user: str,
-    password: str,
-    bblfsh_host: str,
-    bblfsh_port: int,
     bblfsh_timeout: float,
     log_level: str,
 ) -> None:
@@ -128,12 +122,18 @@ def preprocess(
 
     logger = create_logger(log_level, __name__)
 
-    if output_path is None:
-        output_path = check_env_exists(FEATURE_DIR, "output-path")
-        output_path = os.path.join(FEATURE_DIR, FEATURE_DEFAULT_FILENAME)
-        logger.info("Using default filename for output.")
+    dataset_name = check_create_default(dataset_name, "dataset", logger)
+
+    output_path = os.path.join(DATASET_DIR, dataset_name + ".pkl")
     check_remove_file(output_path, logger, force)
     create_directory(os.path.dirname(output_path), logger)
+
+    bblfsh_host = check_env_exists("BBLFSH_HOSTNAME")
+    bblfsh_port = check_env_exists("BBLFSH_PORT")
+    host = check_env_exists("GITBASE_HOSTNAME")
+    port = int(check_env_exists("GITBASE_PORT"))
+    user = check_env_exists("GITBASE_USERNAME")
+    password = check_env_exists("GITBASE_PASSWORD")
 
     logger.info("Processing repository '%s'" % repo)
     logger.info("Retrieving tagged references ...")
@@ -192,7 +192,7 @@ def preprocess(
     if stem:
         stemmer = PorterStemmer()
     blacklisted_files: Set[str] = set()
-    client = bblfsh.BblfshClient("%s:%d" % (bblfsh_host, bblfsh_port))
+    client = bblfsh.BblfshClient("%s:%s" % (bblfsh_host, bblfsh_port))
     parsed_count: CounterType = Counter()
     feature_mapping = {
         xpath: feature_tuple
@@ -228,8 +228,7 @@ def preprocess(
                 if time.time() - start > bblfsh_timeout - 0.1 and attempt == 0:
                     logger.warn("Babelfish timed out, restarting the container ...")
                     subprocess.call(
-                        ["docker", "restart", bblfsh_host],
-                        stdout=open(subprocess.DEVNULL, "wb"),
+                        ["docker", "restart", bblfsh_host], stdout=subprocess.DEVNULL
                     )
                     time.sleep(10)
                     logger.warn("Restarted the container.")

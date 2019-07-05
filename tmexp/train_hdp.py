@@ -5,26 +5,23 @@ import gensim
 import numpy as np
 import tqdm
 
-from .create_bow import DOCWORD_FILE_NAME, VOCAB_FILE_NAME
 from .utils import (
     BOW_DIR,
-    check_env_exists,
+    check_create_default,
     check_file_exists,
     check_remove_file,
     create_directory,
     create_logger,
+    DOCTOPIC_FILE_NAME,
+    DOCWORD_FILE_NAME,
     TOPICS_DIR,
+    VOCAB_FILE_NAME,
+    WORDTOPIC_FILENAME,
 )
 
 
-DOCTOPIC_FILE_NAME = "doc.topic.txt"
-WORDTOPIC_FILENAME = "word.topic.npy"
-
-
 def train_hdp(
-    input_dir: Optional[str],
-    output_dir: Optional[str],
-    dataset_name: str,
+    bow_name: Optional[str],
     exp_name: Optional[str],
     force: bool,
     chunk_size: int,
@@ -42,20 +39,16 @@ def train_hdp(
 ) -> None:
     logger = create_logger(log_level, __name__)
 
-    if input_dir is None:
-        input_dir = check_env_exists(BOW_DIR, "input-dir")
-    input_dir = os.path.join(input_dir, dataset_name)
+    if bow_name is None:
+        raise RuntimeError("Bow name not specified, aborting.")
+    input_dir = os.path.join(BOW_DIR, bow_name)
     words_input_path = os.path.join(input_dir, VOCAB_FILE_NAME)
     check_file_exists(words_input_path)
     docword_input_path = os.path.join(input_dir, DOCWORD_FILE_NAME)
     check_file_exists(docword_input_path)
 
-    if output_dir is None:
-        output_dir = check_env_exists(TOPICS_DIR, "output-dir")
-    output_dir = os.path.join(output_dir, dataset_name)
-    if exp_name is None:
-        exp_name = "experiment_%d" % (len(os.listdir(output_dir)) + 1)
-    output_dir = os.path.join(output_dir, exp_name)
+    exp_name = check_create_default(exp_name, "experiment", logger)
+    output_dir = os.path.join(TOPICS_DIR, bow_name, exp_name)
     doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILE_NAME)
     check_remove_file(doctopic_output_path, logger, force)
     wordtopic_output_path = os.path.join(output_dir, WORDTOPIC_FILENAME)
