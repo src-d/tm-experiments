@@ -4,7 +4,7 @@ RUN mkdir /data
 
 ENV BBLFSH_HOSTNAME=tmexp_bblfshd \
   BBLFSH_PORT=9432 \
-  GITBASE_HOSTNAME=gitbase \
+  GITBASE_HOSTNAME=tmexp_gitbase \
   GITBASE_PORT=3306 \
   GITBASE_USERNAME=root \
   GITBASE_PASSWORD=

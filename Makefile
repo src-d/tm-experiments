@@ -1,6 +1,6 @@
 BBLFSHD_NAME ?= tmexp_bblfshd
 BBLFSHD_PORT ?= 9432
-GITBASE_NAME ?= gitbase
+GITBASE_NAME ?= tmexp_gitbase
 GITBASE_PORT ?= 3306
 REPOS ?= repos
 RESOLVED_REPOS != readlink --canonicalize-missing $(REPOS)

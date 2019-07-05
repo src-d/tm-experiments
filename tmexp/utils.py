@@ -40,6 +40,8 @@ WORDTOPIC_FILENAME = "word.topic.npy"
 
 VIZ_DIR = "/data/visualisations"
 
+CUR_TIME = None
+
 
 class TqdmLoggingHandler(Handler):
     def __init__(self, level: int = NOTSET) -> None:
@@ -63,11 +65,11 @@ def create_logger(log_level: str, name: str) -> Logger:
     return logger
 
 
-def check_create_default(name: Optional[str], out_type: str, logger: Logger) -> str:
-    if name is None:
-        name = "%s-%s" % (time.strftime("%m-%d-%H:%M"), out_type)
-        logger.info("Created default %s name: '%s'", out_type, name)
-    return name
+def check_create_default(out_type: str) -> str:
+    global CUR_TIME
+    if CUR_TIME is None:
+        CUR_TIME = time.strftime("%m-%d-%H:%M")
+    return "%s-%s" % (CUR_TIME, out_type)
 
 
 def check_file_exists(file_path: str) -> None:

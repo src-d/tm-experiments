@@ -25,7 +25,6 @@ import tqdm
 
 from .gitbase_queries import FILE_CONTENT, FILE_INFO, TAGGED_REFS
 from .utils import (
-    check_create_default,
     check_env_exists,
     check_remove_file,
     create_directory,
@@ -94,7 +93,7 @@ def extract(
 
 def preprocess(
     repo: str,
-    dataset_name: Optional[str],
+    dataset_name: str,
     exclude_refs: List[str],
     only_by_date: bool,
     version_sep: str,
@@ -122,14 +121,12 @@ def preprocess(
 
     logger = create_logger(log_level, __name__)
 
-    dataset_name = check_create_default(dataset_name, "dataset", logger)
-
     output_path = os.path.join(DATASET_DIR, dataset_name + ".pkl")
     check_remove_file(output_path, logger, force)
     create_directory(os.path.dirname(output_path), logger)
 
     bblfsh_host = check_env_exists("BBLFSH_HOSTNAME")
-    bblfsh_port = check_env_exists("BBLFSH_PORT")
+    bblfsh_port = int(check_env_exists("BBLFSH_PORT"))
     host = check_env_exists("GITBASE_HOSTNAME")
     port = int(check_env_exists("GITBASE_PORT"))
     user = check_env_exists("GITBASE_USERNAME")
@@ -192,7 +189,7 @@ def preprocess(
     if stem:
         stemmer = PorterStemmer()
     blacklisted_files: Set[str] = set()
-    client = bblfsh.BblfshClient("%s:%s" % (bblfsh_host, bblfsh_port))
+    client = bblfsh.BblfshClient("%s:%d" % (bblfsh_host, bblfsh_port))
     parsed_count: CounterType = Counter()
     feature_mapping = {
         xpath: feature_tuple

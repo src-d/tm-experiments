@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 import gensim
 import numpy as np
@@ -7,7 +7,6 @@ import tqdm
 
 from .utils import (
     BOW_DIR,
-    check_create_default,
     check_file_exists,
     check_remove_file,
     create_directory,
@@ -21,8 +20,8 @@ from .utils import (
 
 
 def train_hdp(
-    bow_name: Optional[str],
-    exp_name: Optional[str],
+    bow_name: str,
+    exp_name: str,
     force: bool,
     chunk_size: int,
     kappa: float,
@@ -39,15 +38,12 @@ def train_hdp(
 ) -> None:
     logger = create_logger(log_level, __name__)
 
-    if bow_name is None:
-        raise RuntimeError("Bow name not specified, aborting.")
     input_dir = os.path.join(BOW_DIR, bow_name)
     words_input_path = os.path.join(input_dir, VOCAB_FILE_NAME)
     check_file_exists(words_input_path)
     docword_input_path = os.path.join(input_dir, DOCWORD_FILE_NAME)
     check_file_exists(docword_input_path)
 
-    exp_name = check_create_default(exp_name, "experiment", logger)
     output_dir = os.path.join(TOPICS_DIR, bow_name, exp_name)
     doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILE_NAME)
     check_remove_file(doctopic_output_path, logger, force)

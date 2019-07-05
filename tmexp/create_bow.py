@@ -7,7 +7,6 @@ import tqdm
 
 from .utils import (
     BOW_DIR,
-    check_create_default,
     check_file_exists,
     check_remove_file,
     create_directory,
@@ -32,8 +31,8 @@ def check_fraction(fraction: float, arg_name: str) -> None:
 
 
 def create_bow(
-    dataset_name: Optional[str],
-    bow_name: Optional[str],
+    dataset_name: str,
+    bow_name: str,
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
     features: List[str],
@@ -45,12 +44,9 @@ def create_bow(
 ) -> None:
     logger = create_logger(log_level, __name__)
 
-    if dataset_name is None:
-        raise RuntimeError("Dataset name not specified, aborting.")
     input_path = os.path.join(DATASET_DIR, dataset_name + ".pkl")
     check_file_exists(input_path)
 
-    bow_name = check_create_default(bow_name, "bow", logger)
     output_dir = os.path.join(BOW_DIR, bow_name)
     create_directory(output_dir, logger)
     words_output_path = os.path.join(output_dir, VOCAB_FILE_NAME)

@@ -36,18 +36,18 @@ For all commands we only specify the required arguments, check the optional ones
 This command will allow you to create a dataset from a cloned git repository. Before launching the command, you will thus need to clone one (or multiple) repository in a directory, as well as start the Babelfish and Gitbase servers:
 
 ```
-make start RESOLVED_REPOS=~/path/to/cloned/repos
+make start REPOS=~/path/to/cloned/repos
 ```
 
-You can now launch the preprocessing withe the follow command _(we give the docker socket in order to be able to relaunch Babelfish, however this is a **temporary** hack)_:
+You can now launch the preprocessing with the following command _(we give the docker socket in order to be able to relaunch Babelfish, however this is a **temporary** hack)_:
 
 ```
-docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /path/to/data:/data --link tmexp_bblfshd:tmexp_bblfshd --link gitbase:gitbase tmexp preprocess -r repo --dataset-name my-dataset
+docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock -v /path/to/data:/data --link tmexp_bblfshd:tmexp_bblfshd --link tmexp_gitbase:tmexp_gitbase tmexp preprocess -r repo --dataset-name my-dataset
 ```
 
 Once your job is finished, the output file should be located in `/path/to/data/datasets/`. Unless you wish to run this command once more, you can remove the Babelfish and Gitbase containers, as they will not be of further use, with:
 
-`docker stop gitbase tmexp_bblfshd`
+`docker stop tmexp_gitbase tmexp_bblfshd`
 
 ### Create BoW
 

@@ -5,7 +5,7 @@ from typing import Any
 from .create_bow import create_bow, DIFF_MODEL, HALL_MODEL
 from .preprocess import COMMENTS, IDENTIFIERS, LITERALS, preprocess
 from .train_hdp import train_hdp
-from .utils import SUPPORTED_LANGUAGES
+from .utils import check_create_default, SUPPORTED_LANGUAGES
 
 
 def add_lang_args(cmd_parser: argparse.ArgumentParser) -> None:
@@ -44,34 +44,47 @@ def add_force_arg(cmd_parser: argparse.ArgumentParser) -> None:
     )
 
 
-def add_dataset_arg(cmd_parser: argparse.ArgumentParser) -> None:
-    cmd_parser.add_argument(
-        "--dataset-name",
-        help="Name of the dataset created by `preprocess`, defaults"
-        " to 'MM-DD-HH:MM-dataset'.",
-        default=None,
-        type=str,
-    )
+def add_required(cmd_parser: argparse.ArgumentParser, flag: str, help: str) -> None:
+    cmd_parser.add_argument(flag, help=help, required=True)
 
 
-def add_bow_arg(cmd_parser: argparse.ArgumentParser) -> None:
-    cmd_parser.add_argument(
-        "--bow-name",
-        help="Name of the BoW created by `create_bow`, defaults"
-        " to 'MM-DD-HH:MM-bow'.",
-        default=None,
-        type=str,
-    )
+def add_default(
+    cmd_parser: argparse.ArgumentParser, flag: str, help: str, out_type: str
+) -> None:
+    cmd_parser.add_argument(flag, help=help, default=check_create_default(out_type))
 
 
-def add_experiment_arg(cmd_parser: argparse.ArgumentParser) -> None:
-    cmd_parser.add_argument(
-        "--exp-name",
-        help="Name of the experiment created by `train_$`, defaults"
-        " to 'MM-DD-HH:MM-experiment'.",
-        default=None,
-        type=str,
-    )
+def add_dataset_arg(cmd_parser: argparse.ArgumentParser, required: bool) -> None:
+    help = "Name of the dataset created by `preprocess`%s."
+    if required:
+        add_required(cmd_parser, "--dataset-name", help % "")
+    else:
+        add_default(
+            cmd_parser,
+            "--dataset-name",
+            help % ", defaults to '%(default)s'",
+            "dataset",
+        )
+
+
+def add_bow_arg(cmd_parser: argparse.ArgumentParser, required: bool) -> None:
+    help = "Name of the BoW created by `create_bow`%s."
+    if required:
+        add_required(cmd_parser, "--bow-name", help % "")
+    else:
+        add_default(
+            cmd_parser, "--bow-name", help % ", defaults to '%(default)s'", "bow"
+        )
+
+
+def add_experiment_arg(cmd_parser: argparse.ArgumentParser, required: bool) -> None:
+    help = "Name of the experiment created by `train_$`%s."
+    if required:
+        add_required(cmd_parser, "--exp-name", help % "")
+    else:
+        add_default(
+            cmd_parser, "--exp-name", help % ", defaults to '%(default)s'", "experiment"
+        )
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -97,13 +110,13 @@ def get_parser() -> argparse.ArgumentParser:
     )
     preprocess_parser.set_defaults(handler=preprocess)
 
-    add_dataset_arg(preprocess_parser)
+    add_dataset_arg(preprocess_parser, required=False)
     add_feature_arg(preprocess_parser)
     add_force_arg(preprocess_parser)
     add_lang_args(preprocess_parser)
 
     preprocess_parser.add_argument(
-        "-r", "--repo", help="Name of the repo to preprocess.", type=str, required=True
+        "-r", "--repo", help="Name of the repo to preprocess.", required=True
     )
     preprocess_parser.add_argument(
         "--exclude-refs",
@@ -120,7 +133,6 @@ def get_parser() -> argparse.ArgumentParser:
     preprocess_parser.add_argument(
         "--version-sep",
         help="If sorting by version, provide the seperator between major and minor.",
-        type=str,
         default=".",
     )
     preprocess_parser.add_argument(
@@ -145,8 +157,8 @@ def get_parser() -> argparse.ArgumentParser:
     )
     create_bow_parser.set_defaults(handler=create_bow)
 
-    add_bow_arg(create_bow_parser)
-    add_dataset_arg(create_bow_parser)
+    add_bow_arg(create_bow_parser, required=False)
+    add_dataset_arg(create_bow_parser, required=True)
     add_feature_arg(create_bow_parser)
     add_force_arg(create_bow_parser)
     add_lang_args(create_bow_parser)
@@ -155,7 +167,6 @@ def get_parser() -> argparse.ArgumentParser:
         "--topic-model",
         help="Topic evolution model to use.",
         required=True,
-        type=str,
         choices=[DIFF_MODEL, HALL_MODEL],
     )
     create_bow_parser.add_argument(
@@ -179,8 +190,8 @@ def get_parser() -> argparse.ArgumentParser:
     )
     train_hdp_parser.set_defaults(handler=train_hdp)
 
-    add_bow_arg(train_hdp_parser)
-    add_experiment_arg(train_hdp_parser)
+    add_bow_arg(train_hdp_parser, required=True)
+    add_experiment_arg(train_hdp_parser, required=False)
     add_force_arg(train_hdp_parser)
 
     train_hdp_parser.add_argument(
