@@ -5,18 +5,23 @@ import gensim
 import numpy as np
 import tqdm
 
-from .create_bow import DOCWORD_FILE_NAME, VOCAB_FILE_NAME
-from .utils import check_exists, check_remove_file, create_directory, create_logger
-
-
-DOCTOPIC_FILE_NAME = "doc.topic.txt"
-WORDTOPIC_FILENAME = "word.topic.npy"
+from .utils import (
+    BOW_DIR,
+    check_file_exists,
+    check_remove_file,
+    create_directory,
+    create_logger,
+    DOCTOPIC_FILE_NAME,
+    DOCWORD_FILE_NAME,
+    TOPICS_DIR,
+    VOCAB_FILE_NAME,
+    WORDTOPIC_FILENAME,
+)
 
 
 def train_hdp(
-    input_dir: str,
-    output_dir: str,
-    dataset_name: str,
+    bow_name: str,
+    exp_name: str,
     force: bool,
     chunk_size: int,
     kappa: float,
@@ -33,12 +38,13 @@ def train_hdp(
 ) -> None:
     logger = create_logger(log_level, __name__)
 
-    input_dir = os.path.join(input_dir, dataset_name)
-    output_dir = os.path.join(output_dir, dataset_name)
+    input_dir = os.path.join(BOW_DIR, bow_name)
     words_input_path = os.path.join(input_dir, VOCAB_FILE_NAME)
-    check_exists(words_input_path)
+    check_file_exists(words_input_path)
     docword_input_path = os.path.join(input_dir, DOCWORD_FILE_NAME)
-    check_exists(docword_input_path)
+    check_file_exists(docword_input_path)
+
+    output_dir = os.path.join(TOPICS_DIR, bow_name, exp_name)
     doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILE_NAME)
     check_remove_file(doctopic_output_path, logger, force)
     wordtopic_output_path = os.path.join(output_dir, WORDTOPIC_FILENAME)

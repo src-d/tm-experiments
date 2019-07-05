@@ -1,6 +1,7 @@
 import logging
 from logging import Handler, Logger, LogRecord, NOTSET
 import os
+import time
 from typing import List, Optional
 
 import tqdm
@@ -26,6 +27,21 @@ SUPPORTED_LANGUAGES = [
     "TypeScript",
 ]
 
+DATASET_DIR = "/data/datasets"
+
+BOW_DIR = "/data/bows"
+DOC_FILE_NAME = "doc.bow_tm.txt"
+DOCWORD_FILE_NAME = "docword.bow_tm.txt"
+VOCAB_FILE_NAME = "vocab.bow_tm.txt"
+
+TOPICS_DIR = "/data/topics"
+DOCTOPIC_FILE_NAME = "doc.topic.txt"
+WORDTOPIC_FILENAME = "word.topic.npy"
+
+VIZ_DIR = "/data/visualisations"
+
+CUR_TIME = None
+
 
 class TqdmLoggingHandler(Handler):
     def __init__(self, level: int = NOTSET) -> None:
@@ -49,9 +65,22 @@ def create_logger(log_level: str, name: str) -> Logger:
     return logger
 
 
-def check_exists(file_path: str) -> None:
+def check_create_default(out_type: str) -> str:
+    global CUR_TIME
+    if CUR_TIME is None:
+        CUR_TIME = time.strftime("%m-%d-%H:%M")
+    return "%s-%s" % (CUR_TIME, out_type)
+
+
+def check_file_exists(file_path: str) -> None:
     if not os.path.exists(file_path):
-        raise RuntimeError("File '%s' does not exists, aborting." % file_path)
+        raise FileNotFoundError("File '%s' does not exists, aborting." % file_path)
+
+
+def check_env_exists(env_name: str) -> str:
+    if env_name not in os.environ:
+        raise RuntimeError("Variable '%s' does not exists, aborting." % env_name)
+    return os.environ[env_name]
 
 
 def check_remove_file(file_path: str, logger: Logger, force: bool) -> None:

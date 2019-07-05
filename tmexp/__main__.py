@@ -5,7 +5,7 @@ from typing import Any
 from .create_bow import create_bow, DIFF_MODEL, HALL_MODEL
 from .preprocess import COMMENTS, IDENTIFIERS, LITERALS, preprocess
 from .train_hdp import train_hdp
-from .utils import SUPPORTED_LANGUAGES
+from .utils import check_create_default, SUPPORTED_LANGUAGES
 
 
 def add_lang_args(cmd_parser: argparse.ArgumentParser) -> None:
@@ -44,13 +44,47 @@ def add_force_arg(cmd_parser: argparse.ArgumentParser) -> None:
     )
 
 
-def add_dataset_arg(cmd_parser: argparse.ArgumentParser) -> None:
-    cmd_parser.add_argument(
-        "--dataset-name",
-        help="Name of the dataset, used as the second level input/output directory.",
-        type=str,
-        required=True,
-    )
+def add_required(cmd_parser: argparse.ArgumentParser, flag: str, help: str) -> None:
+    cmd_parser.add_argument(flag, help=help, required=True)
+
+
+def add_default(
+    cmd_parser: argparse.ArgumentParser, flag: str, help: str, out_type: str
+) -> None:
+    cmd_parser.add_argument(flag, help=help, default=check_create_default(out_type))
+
+
+def add_dataset_arg(cmd_parser: argparse.ArgumentParser, required: bool) -> None:
+    help = "Name of the dataset created by `preprocess`%s."
+    if required:
+        add_required(cmd_parser, "--dataset-name", help % "")
+    else:
+        add_default(
+            cmd_parser,
+            "--dataset-name",
+            help % ", defaults to '%(default)s'",
+            "dataset",
+        )
+
+
+def add_bow_arg(cmd_parser: argparse.ArgumentParser, required: bool) -> None:
+    help = "Name of the BoW created by `create_bow`%s."
+    if required:
+        add_required(cmd_parser, "--bow-name", help % "")
+    else:
+        add_default(
+            cmd_parser, "--bow-name", help % ", defaults to '%(default)s'", "bow"
+        )
+
+
+def add_experiment_arg(cmd_parser: argparse.ArgumentParser, required: bool) -> None:
+    help = "Name of the experiment created by `train_$`%s."
+    if required:
+        add_required(cmd_parser, "--exp-name", help % "")
+    else:
+        add_default(
+            cmd_parser, "--exp-name", help % ", defaults to '%(default)s'", "experiment"
+        )
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -75,11 +109,14 @@ def get_parser() -> argparse.ArgumentParser:
         "repository and store them as a pickled dict.",
     )
     preprocess_parser.set_defaults(handler=preprocess)
-    add_lang_args(preprocess_parser)
+
+    add_dataset_arg(preprocess_parser, required=False)
     add_feature_arg(preprocess_parser)
     add_force_arg(preprocess_parser)
+    add_lang_args(preprocess_parser)
+
     preprocess_parser.add_argument(
-        "-r", "--repo", help="Name of the repo to preprocess.", type=str, required=True
+        "-r", "--repo", help="Name of the repo to preprocess.", required=True
     )
     preprocess_parser.add_argument(
         "--exclude-refs",
@@ -96,15 +133,7 @@ def get_parser() -> argparse.ArgumentParser:
     preprocess_parser.add_argument(
         "--version-sep",
         help="If sorting by version, provide the seperator between major and minor.",
-        type=str,
         default=".",
-    )
-    preprocess_parser.add_argument(
-        "-o",
-        "--output-path",
-        help="Output path for the pickled dict.",
-        required=True,
-        type=str,
     )
     preprocess_parser.add_argument(
         "--no-tokenize",
@@ -114,38 +143,6 @@ def get_parser() -> argparse.ArgumentParser:
     )
     preprocess_parser.add_argument(
         "--no-stem", help="To skip stemming.", dest="stem", action="store_false"
-    )
-    preprocess_parser.add_argument(
-        "--gitbase-host",
-        help="Gitbase hostname.",
-        type=str,
-        default="0.0.0.0",
-        dest="host",
-    )
-    preprocess_parser.add_argument(
-        "--gitbase-port", help="Gitbase port.", type=int, default=3306, dest="port"
-    )
-    preprocess_parser.add_argument(
-        "--gitbase-user", help="Gitbase user.", type=str, default="root", dest="user"
-    )
-    preprocess_parser.add_argument(
-        "--gitbase-pass",
-        help="Gitbase password.",
-        type=str,
-        default="",
-        dest="password",
-    )
-    preprocess_parser.add_argument(
-        "--bblfsh-container",
-        help="Name of the Babelfish docker container.",
-        type=str,
-        default="tmexp_bblfshd",
-    )
-    preprocess_parser.add_argument(
-        "--bblfsh-host", help="Babelfish hostname.", type=str, default="0.0.0.0"
-    )
-    preprocess_parser.add_argument(
-        "--bblfsh-port", help="Babelfish port.", type=int, default=9432
     )
     preprocess_parser.add_argument(
         "--bblfsh-timeout",
@@ -159,29 +156,17 @@ def get_parser() -> argparse.ArgumentParser:
         "create_bow", help="Create the BoW dataset from a pickled dict, in UCI format."
     )
     create_bow_parser.set_defaults(handler=create_bow)
-    add_lang_args(create_bow_parser)
+
+    add_bow_arg(create_bow_parser, required=False)
+    add_dataset_arg(create_bow_parser, required=True)
     add_feature_arg(create_bow_parser)
     add_force_arg(create_bow_parser)
-    add_dataset_arg(create_bow_parser)
-    create_bow_parser.add_argument(
-        "-i",
-        "--input-path",
-        help="Input path for the pickled dict.",
-        required=True,
-        type=str,
-    )
-    create_bow_parser.add_argument(
-        "-o",
-        "--output-dir",
-        help="First level output directory for the BoW files.",
-        required=True,
-        type=str,
-    )
+    add_lang_args(create_bow_parser)
+
     create_bow_parser.add_argument(
         "--topic-model",
         help="Topic evolution model to use.",
         required=True,
-        type=str,
         choices=[DIFF_MODEL, HALL_MODEL],
     )
     create_bow_parser.add_argument(
@@ -204,23 +189,11 @@ def get_parser() -> argparse.ArgumentParser:
         "train_hdp", help="Train an HDP model from the input BoW."
     )
     train_hdp_parser.set_defaults(handler=train_hdp)
+
+    add_bow_arg(train_hdp_parser, required=True)
+    add_experiment_arg(train_hdp_parser, required=False)
     add_force_arg(train_hdp_parser)
-    add_dataset_arg(train_hdp_parser)
-    train_hdp_parser.add_argument(
-        "-i",
-        "--input-dir",
-        help="First level input directory for the BoW files.",
-        required=True,
-        type=str,
-    )
-    train_hdp_parser.add_argument(
-        "-o",
-        "--output-dir",
-        help="First level output directory for the word-topic and document-topic"
-        " distributions.",
-        required=True,
-        type=str,
-    )
+
     train_hdp_parser.add_argument(
         "--chunk-size", help="Number of documents in one chunk.", default=256, type=int
     )

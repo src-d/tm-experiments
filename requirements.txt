@@ -1,0 +1,5 @@
+nltk==3.4.3
+pymysql==0.9.3
+bblfsh==3.0.4
+tqdm==4.32.2
+gensim==3.7.3

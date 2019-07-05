@@ -1,6 +1,6 @@
 BBLFSHD_NAME ?= tmexp_bblfshd
 BBLFSHD_PORT ?= 9432
-GITBASE_NAME ?= gitbase
+GITBASE_NAME ?= tmexp_gitbase
 GITBASE_PORT ?= 3306
 REPOS ?= repos
 RESOLVED_REPOS != readlink --canonicalize-missing $(REPOS)
@@ -34,7 +34,7 @@ gitbase-start:
 			--link $(BBLFSHD_NAME):$(BBLFSHD_NAME) \
 			--env BBLFSH_ENDPOINT=$(BBLFSHD_NAME):$(BBLFSHD_PORT) \
 			--volume $(RESOLVED_REPOS):/opt/repos \
-			srcd/gitbase:v0.21.0;\
+			srcd/gitbase:v0.22.0;\
 	fi
 
 .PHONY: check start bblfsh-start gitbase-start
