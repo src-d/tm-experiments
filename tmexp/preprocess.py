@@ -26,7 +26,7 @@ import tqdm
 from .gitbase_queries import FILE_CONTENT, FILE_INFO, TAGGED_REFS
 from .utils import (
     check_env_exists,
-    check_remove_file,
+    check_remove,
     create_directory,
     create_language_list,
     create_logger,
@@ -122,7 +122,7 @@ def preprocess(
     logger = create_logger(log_level, __name__)
 
     output_path = os.path.join(DATASET_DIR, dataset_name + ".pkl")
-    check_remove_file(output_path, logger, force)
+    check_remove(output_path, logger, force)
     create_directory(os.path.dirname(output_path), logger)
 
     bblfsh_host = check_env_exists("BBLFSH_HOSTNAME")

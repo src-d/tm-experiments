@@ -8,13 +8,14 @@ import tqdm
 from .utils import (
     BOW_DIR,
     check_file_exists,
-    check_remove_file,
+    check_remove,
     create_directory,
     create_language_list,
     create_logger,
     DATASET_DIR,
     DOC_FILE_NAME,
     DOCWORD_FILE_NAME,
+    REF_FILE_NAME,
     VOCAB_FILE_NAME,
 )
 
@@ -50,11 +51,13 @@ def create_bow(
     output_dir = os.path.join(BOW_DIR, bow_name)
     create_directory(output_dir, logger)
     words_output_path = os.path.join(output_dir, VOCAB_FILE_NAME)
-    check_remove_file(words_output_path, logger, force)
+    check_remove(words_output_path, logger, force)
     docword_output_path = os.path.join(output_dir, DOCWORD_FILE_NAME)
-    check_remove_file(docword_output_path, logger, force)
+    check_remove(docword_output_path, logger, force)
     doc_output_path = os.path.join(output_dir, DOC_FILE_NAME)
-    check_remove_file(doc_output_path, logger, force)
+    check_remove(doc_output_path, logger, force)
+    refs_output_path = os.path.join(output_dir, REF_FILE_NAME)
+    check_remove(refs_output_path, logger, force)
 
     check_fraction(min_word_frac, "min-word-frac")
     check_fraction(max_word_frac, "max-word-frac")
@@ -185,6 +188,11 @@ def create_bow(
                 fout.write(" ".join([doc_name] + refs) + "\n")
     logger.info("Number of distinct documents : %d" % num_docs)
     logger.info("Saved document index in '%s'" % doc_output_path)
+
+    logger.info("Saving tagged refs ...")
+    with open(refs_output_path, "w", encoding="utf-8") as fout:
+        fout.write("\n".join(input_dict["refs"]))
+    logger.info("Saved tagged refs in '%s'" % refs_output_path)
 
     num_nnz = sum(len(wc) for word_counts in bow.values() for wc in word_counts)
     logger.info("Number of document-word pairs: %d" % num_nnz)

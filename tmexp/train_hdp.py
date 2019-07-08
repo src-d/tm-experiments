@@ -8,7 +8,7 @@ import tqdm
 from .utils import (
     BOW_DIR,
     check_file_exists,
-    check_remove_file,
+    check_remove,
     create_directory,
     create_logger,
     DOCTOPIC_FILE_NAME,
@@ -46,9 +46,9 @@ def train_hdp(
 
     output_dir = os.path.join(TOPICS_DIR, bow_name, exp_name)
     doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILE_NAME)
-    check_remove_file(doctopic_output_path, logger, force)
+    check_remove(doctopic_output_path, logger, force)
     wordtopic_output_path = os.path.join(output_dir, WORDTOPIC_FILENAME)
-    check_remove_file(wordtopic_output_path, logger, force)
+    check_remove(wordtopic_output_path, logger, force)
     create_directory(output_dir, logger)
 
     logger.info("Loading bags of words ...")
