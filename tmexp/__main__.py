@@ -237,13 +237,6 @@ def get_parser() -> argparse.ArgumentParser:
         default=0.0001,
         type=float,
     )
-    train_hdp_parser.add_argument(
-        "--min-proba",
-        help="Lower bound on the probability a topic is affected to a document, "
-        "defaults to %(default)s.",
-        default=0.01,
-        type=float,
-    )
 
     return parser
 

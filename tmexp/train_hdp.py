@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Tuple
 
 import gensim
 import numpy as np
@@ -33,7 +33,6 @@ def train_hdp(
     eta: float,
     scale: float,
     var_converge: float,
-    min_proba: float,
     log_level: str,
 ) -> None:
     logger = create_logger(log_level, __name__)
@@ -89,45 +88,16 @@ def train_hdp(
     )
     logger.info("Trained the model.")
 
-    logger.info(
-        "Inferring topics per document (pruning topics with probability"
-        " inferior to %.2f)..." % min_proba
-    )
-    num_topics: List[int] = []
-    document_topics: List[List[Tuple[int, float]]] = []
-    used_topics: Set[int] = set()
-    for bow in tqdm.tqdm(corpus):
+    logger.info("Inferring topics per document ...")
+    document_topics = np.empty((len(corpus), T))
+    for ind_doc, bow in tqdm.tqdm(enumerate(corpus)):
         gammas = hdp.inference([bow])[0]
-        topic_dist = gammas / sum(gammas)
-        topics = [
-            (topic_id, topic_proba)
-            for topic_id, topic_proba in enumerate(topic_dist)
-            if topic_proba >= min_proba
-        ]
-        used_topics.update(topic_id for topic_id, _ in topics)
-        num_topics.append(len(topics))
-        topics.sort(key=lambda pair: pair[1], reverse=True)
-        document_topics.append(topics)
-    logger.info("%d topics remain after pruning." % len(used_topics))
-    topic_mapping = {old: new for new, old in enumerate(sorted(used_topics))}
-    for op, info in zip(
-        [np.min, np.median, np.mean, np.max], ["Minimum", "Median", "Mean", "Maximum"]
-    ):
-        logger.info(
-            "%s amount of topics per document after pruning: %.2f", info, op(num_topics)
-        )
-    logger.info("Saving pruned topics per document ...")
-    with open(doctopic_output_path, "w", encoding="utf-8") as fout:
-        for topics in document_topics:
-            fout.write(
-                "%s\n"
-                % " ".join(
-                    "%d,%f" % (topic_mapping[topic_id], topic_proba)
-                    for topic_id, topic_proba in topics
-                )
-            )
-    logger.info("Saved pruned topics per document in '%s'." % doctopic_output_path)
+        document_topics[ind_doc, :] = gammas / sum(gammas)
+
+    logger.info("Saving topics per document ...")
+    np.save(doctopic_output_path, document_topics)
+    logger.info("Saved topics per document in '%s'." % doctopic_output_path)
 
     logger.info("Saving word/topic distribution ...")
-    np.save(wordtopic_output_path, hdp.get_topics()[sorted(used_topics), :])
+    np.save(wordtopic_output_path, hdp.get_topics())
     logger.info("Saved word/topic distribution in '%s'." % wordtopic_output_path)

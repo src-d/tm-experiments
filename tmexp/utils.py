@@ -37,8 +37,8 @@ REF_FILE_NAME = "refs.bow_tm.txt"
 VOCAB_FILE_NAME = "vocab.bow_tm.txt"
 
 TOPICS_DIR = "/data/topics"
-DOCTOPIC_FILE_NAME = "doc.topic.txt"
-WORDTOPIC_FILENAME = "word.topic.npy"
+DOCTOPIC_FILE_NAME = "doctopic.npy"
+WORDTOPIC_FILENAME = "wordtopic.npy"
 
 VIZ_DIR = "/data/visualisations"
 
