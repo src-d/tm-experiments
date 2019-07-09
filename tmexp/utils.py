@@ -1,6 +1,7 @@
 import logging
 from logging import Handler, Logger, LogRecord, NOTSET
 import os
+import shutil
 import time
 from typing import List, Optional
 
@@ -27,18 +28,6 @@ SUPPORTED_LANGUAGES = [
     "TypeScript",
 ]
 
-DATASET_DIR = "/data/datasets"
-
-BOW_DIR = "/data/bows"
-DOC_FILE_NAME = "doc.bow_tm.txt"
-DOCWORD_FILE_NAME = "docword.bow_tm.txt"
-VOCAB_FILE_NAME = "vocab.bow_tm.txt"
-
-TOPICS_DIR = "/data/topics"
-DOCTOPIC_FILE_NAME = "doc.topic.txt"
-WORDTOPIC_FILENAME = "word.topic.npy"
-
-VIZ_DIR = "/data/visualisations"
 
 CUR_TIME = None
 
@@ -83,19 +72,22 @@ def check_env_exists(env_name: str) -> str:
     return os.environ[env_name]
 
 
-def check_remove_file(file_path: str, logger: Logger, force: bool) -> None:
-    if os.path.exists(file_path):
-        if not os.path.isfile(file_path):
-            raise RuntimeError(
-                "Path '%s' is a directory or a link, aborting." % file_path
-            )
+def check_remove(path: str, logger: Logger, force: bool, is_dir: bool = False) -> None:
+    if os.path.exists(path):
         if not force:
             raise RuntimeError(
-                "File  %s already exists, aborting (use force to remove)." % file_path
+                "'%s' already exists, aborting (use force to remove)." % path
             )
-
-        logger.warn("File '%s' already exists, removing it." % file_path)
-        os.remove(file_path)
+        if is_dir:
+            if not os.path.isdir(path):
+                raise RuntimeError("'%s' is a file or a link, aborting." % path)
+            logger.warn("Directory '%s' already exists, removing it." % path)
+            shutil.rmtree(path)
+        else:
+            if not os.path.isfile(path):
+                raise RuntimeError("'%s' is a directory or a link, aborting." % path)
+            logger.warn("File '%s' already exists, removing it." % path)
+            os.remove(path)
 
 
 def create_directory(dir_path: str, logger: Logger) -> None:
