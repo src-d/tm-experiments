@@ -5,18 +5,20 @@ from typing import Any, Counter as CounterType, DefaultDict, Dict, List, Optiona
 
 import tqdm
 
-from .utils import (
+from .io_constants import (
     BOW_DIR,
-    check_file_exists,
-    check_remove,
-    create_directory,
-    create_language_list,
-    create_logger,
     DATASET_DIR,
     DOC_FILE_NAME,
     DOCWORD_FILE_NAME,
     REF_FILE_NAME,
     VOCAB_FILE_NAME,
+)
+from .utils import (
+    check_file_exists,
+    check_remove,
+    create_directory,
+    create_language_list,
+    create_logger,
 )
 
 DIFF_MODEL = "diff"

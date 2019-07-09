@@ -5,18 +5,15 @@ import gensim
 import numpy as np
 import tqdm
 
-from .utils import (
+from .io_constants import (
     BOW_DIR,
-    check_file_exists,
-    check_remove,
-    create_directory,
-    create_logger,
     DOCTOPIC_FILE_NAME,
     DOCWORD_FILE_NAME,
     TOPICS_DIR,
     VOCAB_FILE_NAME,
     WORDTOPIC_FILENAME,
 )
+from .utils import check_file_exists, check_remove, create_directory, create_logger
 
 
 def train_hdp(

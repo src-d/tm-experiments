@@ -24,13 +24,13 @@ import pymysql.cursors
 import tqdm
 
 from .gitbase_queries import FILE_CONTENT, FILE_INFO, TAGGED_REFS
+from .io_constants import DATASET_DIR
 from .utils import (
     check_env_exists,
     check_remove,
     create_directory,
     create_language_list,
     create_logger,
-    DATASET_DIR,
 )
 
 warnings.filterwarnings("ignore")
