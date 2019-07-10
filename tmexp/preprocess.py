@@ -282,7 +282,7 @@ def preprocess(
         "files_content": dict(files_content),
         "refs": refs,
     }
-    logger.info("Saving features in '%s' ..." % output_path)
+    logger.info("Saving features ...")
     with open(output_path, "wb") as fout:
         pickle.dump(output_dict, fout)
-    logger.info("Saved features.")
+    logger.info("Saved features in '%s'." % output_path)

@@ -7,10 +7,10 @@ import tqdm
 
 from .io_constants import (
     BOW_DIR,
-    DOCTOPIC_FILE_NAME,
-    DOCWORD_FILE_NAME,
+    DOCTOPIC_FILENAME,
+    DOCWORD_FILENAME,
     TOPICS_DIR,
-    VOCAB_FILE_NAME,
+    VOCAB_FILENAME,
     WORDTOPIC_FILENAME,
 )
 from .utils import check_file_exists, check_remove, create_directory, create_logger
@@ -35,13 +35,13 @@ def train_hdp(
     logger = create_logger(log_level, __name__)
 
     input_dir = os.path.join(BOW_DIR, bow_name)
-    words_input_path = os.path.join(input_dir, VOCAB_FILE_NAME)
+    words_input_path = os.path.join(input_dir, VOCAB_FILENAME)
     check_file_exists(words_input_path)
-    docword_input_path = os.path.join(input_dir, DOCWORD_FILE_NAME)
+    docword_input_path = os.path.join(input_dir, DOCWORD_FILENAME)
     check_file_exists(docword_input_path)
 
     output_dir = os.path.join(TOPICS_DIR, bow_name, exp_name)
-    doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILE_NAME)
+    doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILENAME)
     check_remove(doctopic_output_path, logger, force)
     wordtopic_output_path = os.path.join(output_dir, WORDTOPIC_FILENAME)
     check_remove(wordtopic_output_path, logger, force)
