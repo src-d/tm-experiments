@@ -2,10 +2,14 @@ import argparse
 import logging
 from typing import Any
 
+
 from .create_bow import create_bow, DIFF_MODEL, HALL_MODEL
+from .metrics import compute_metrics
+from .postprocess import postprocess
 from .preprocess import COMMENTS, IDENTIFIERS, LITERALS, preprocess
 from .train_hdp import train_hdp
 from .utils import check_create_default, SUPPORTED_LANGUAGES
+from .visualize import visualize
 
 
 def add_lang_args(cmd_parser: argparse.ArgumentParser) -> None:
@@ -237,7 +241,42 @@ def get_parser() -> argparse.ArgumentParser:
         default=0.0001,
         type=float,
     )
+    # ------------------------------------------------------------------------
 
+    postprocess_parser = subparsers.add_parser(
+        "postprocess",
+        help="Compute document word count and membership given a topic model.",
+    )
+    postprocess_parser.set_defaults(handler=postprocess)
+    add_bow_arg(postprocess_parser, required=True)
+    add_experiment_arg(postprocess_parser, required=True)
+    add_force_arg(postprocess_parser)
+    # ------------------------------------------------------------------------
+
+    compute_metrics_parser = subparsers.add_parser(
+        "compute_metrics",
+        help="Compute metrics given topic distributions over each version.",
+    )
+    compute_metrics_parser.set_defaults(handler=compute_metrics)
+    add_bow_arg(compute_metrics_parser, required=True)
+    add_experiment_arg(compute_metrics_parser, required=True)
+    add_force_arg(compute_metrics_parser)
+    # ------------------------------------------------------------------------
+
+    visualize_parser = subparsers.add_parser(
+        "visualize", help="Create visualizations for precomputed metrics."
+    )
+    visualize_parser.set_defaults(handler=visualize)
+    add_bow_arg(visualize_parser, required=True)
+    add_experiment_arg(visualize_parser, required=True)
+    add_force_arg(visualize_parser)
+    visualize_parser.add_argument(
+        "--max-topics",
+        help="Limit to this amount the number of topics displayed on visualizations "
+        "simultaniously (will select most interesting), defaults to %(default)s.",
+        default=10,
+        type=int,
+    )
     return parser
 
 
