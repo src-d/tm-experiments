@@ -8,10 +8,10 @@ import tqdm
 from .io_constants import (
     BOW_DIR,
     DATASET_DIR,
-    DOC_FILE_NAME,
-    DOCWORD_FILE_NAME,
-    REF_FILE_NAME,
-    VOCAB_FILE_NAME,
+    DOC_FILENAME,
+    DOCWORD_FILENAME,
+    REF_FILENAME,
+    VOCAB_FILENAME,
 )
 from .utils import (
     check_file_exists,
@@ -52,19 +52,19 @@ def create_bow(
 
     output_dir = os.path.join(BOW_DIR, bow_name)
     create_directory(output_dir, logger)
-    words_output_path = os.path.join(output_dir, VOCAB_FILE_NAME)
+    words_output_path = os.path.join(output_dir, VOCAB_FILENAME)
     check_remove(words_output_path, logger, force)
-    docword_output_path = os.path.join(output_dir, DOCWORD_FILE_NAME)
+    docword_output_path = os.path.join(output_dir, DOCWORD_FILENAME)
     check_remove(docword_output_path, logger, force)
-    doc_output_path = os.path.join(output_dir, DOC_FILE_NAME)
+    doc_output_path = os.path.join(output_dir, DOC_FILENAME)
     check_remove(doc_output_path, logger, force)
-    refs_output_path = os.path.join(output_dir, REF_FILE_NAME)
+    refs_output_path = os.path.join(output_dir, REF_FILENAME)
     check_remove(refs_output_path, logger, force)
 
     check_fraction(min_word_frac, "min-word-frac")
     check_fraction(max_word_frac, "max-word-frac")
 
-    logger.info("Reading pickled dict from '%s' ..." % input_path)
+    logger.info("Loading dataset ...")
     with open(input_path, "rb") as fin:
         input_dict = pickle.load(fin)
 

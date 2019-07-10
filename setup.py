@@ -28,6 +28,7 @@ setup(
         "bblfsh==3.0.4",
         "tqdm==4.32.2",
         "gensim==3.7.3",
+        "matplotlib==3.1.1",
     ],
     include_package_data=True,
     license="Apache-2.0",
