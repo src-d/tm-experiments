@@ -5,6 +5,7 @@ from typing import Any
 
 from .create_bow import create_bow, DIFF_MODEL, HALL_MODEL
 from .label import label_topics
+from .merge import merge_datasets
 from .metrics import compute_metrics
 from .postprocess import postprocess
 from .preprocess import COMMENTS, IDENTIFIERS, LITERALS, preprocess
@@ -155,6 +156,22 @@ def get_parser() -> argparse.ArgumentParser:
         type=float,
         default=10.0,
     )
+    # ------------------------------------------------------------------------
+
+    merge_parser = subparsers.add_parser(
+        "merge",
+        help="Merges multiple datasets (it is assumed they stem from the same repo and "
+        "contain distinct files).",
+    )
+    merge_parser.set_defaults(handler=merge_datasets)
+    add_force_arg(merge_parser)
+    merge_parser.add_argument(
+        "-i", "--input-datasets", help="Datasets to merge.", nargs="*", required=True
+    )
+    merge_parser.add_argument(
+        "-o", "--output-dataset", help="Name of the output dataset.", required=True
+    )
+
     # ------------------------------------------------------------------------
 
     create_bow_parser = subparsers.add_parser(
