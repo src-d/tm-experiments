@@ -15,6 +15,7 @@ from .io_constants import (
 )
 from .utils import (
     check_file_exists,
+    check_range,
     check_remove,
     create_directory,
     create_language_list,
@@ -24,13 +25,6 @@ from .utils import (
 DIFF_MODEL = "diff"
 HALL_MODEL = "hall"
 SEP = ":"
-
-
-def check_fraction(fraction: float, arg_name: str) -> None:
-    if not (0 <= fraction <= 1):
-        raise RuntimeError(
-            "Argument '%s' must be in the range [0, 1], aborting." % arg_name
-        )
 
 
 def create_bow(
@@ -61,8 +55,8 @@ def create_bow(
     refs_output_path = os.path.join(output_dir, REF_FILENAME)
     check_remove(refs_output_path, logger, force)
 
-    check_fraction(min_word_frac, "min-word-frac")
-    check_fraction(max_word_frac, "max-word-frac")
+    check_range(min_word_frac, "min-word-frac")
+    check_range(max_word_frac, "max-word-frac")
 
     logger.info("Loading dataset ...")
     with open(input_path, "rb") as fin:

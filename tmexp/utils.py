@@ -72,6 +72,18 @@ def check_env_exists(env_name: str) -> str:
     return os.environ[env_name]
 
 
+def check_range(
+    value: float, arg_name: str, min_value: float = 0.0, max_value: float = 1.0
+) -> None:
+    if not (min_value <= value <= max_value):
+        raise RuntimeError(
+            "Argument '%s' must be in the range [%.1f, %.1f], aborting.",
+            arg_name,
+            min_value,
+            max_value,
+        )
+
+
 def check_remove(path: str, logger: Logger, force: bool, is_dir: bool = False) -> None:
     if os.path.exists(path):
         if not force:

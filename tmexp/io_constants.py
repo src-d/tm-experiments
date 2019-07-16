@@ -12,6 +12,7 @@ WORDTOPIC_FILENAME = "wordtopic.npy"
 MEMBERSHIP_FILENAME = "membership.pkl"
 WORDCOUNT_FILENAME = "wordcount.pkl"
 METRICS_FILENAME = "metrics.pkl"
+LABELS_FILENAME = "labels.txt"
 
 VIZ_DIR = "/data/visualisations"
 HEATMAP_FILENAME = "heatmap_%s.png"
