@@ -4,6 +4,7 @@ from typing import Any
 
 
 from .create_bow import create_bow, DIFF_MODEL, HALL_MODEL
+from .label import label_topics
 from .metrics import compute_metrics
 from .postprocess import postprocess
 from .preprocess import COMMENTS, IDENTIFIERS, LITERALS, preprocess
@@ -277,6 +278,51 @@ def get_parser() -> argparse.ArgumentParser:
         default=10,
         type=int,
     )
+    # ------------------------------------------------------------------------
+
+    label_topics_parser = subparsers.add_parser(
+        "label_topics",
+        help="Given a topic model, automatically infer labels for each topic.",
+    )
+    label_topics_parser.set_defaults(handler=label_topics)
+    add_bow_arg(label_topics_parser, required=True)
+    add_experiment_arg(label_topics_parser, required=True)
+    add_force_arg(label_topics_parser)
+    label_topics_parser.add_argument(
+        "--mu",
+        help="Weights how discriminative we want the label to be relative to other"
+        " topics , defaults to %(default)s.",
+        default=1.0,
+        type=float,
+    )
+    label_topics_parser.add_argument(
+        "--label-size",
+        help="Number of words in a label, defaults to %(default)s.",
+        default=2,
+        type=int,
+    )
+    label_topics_parser.add_argument(
+        "--min-prob",
+        help="Admissible words for a topic label must have a topic probability over "
+        "this value, defaults to %(default)s.",
+        default=0.001,
+        type=float,
+    )
+    label_topics_parser.add_argument(
+        "--max-topics",
+        help="Admissible words for a topic label must be admissible for less then this"
+        " amount of topics, defaults to %(default)s.",
+        default=10,
+        type=int,
+    )
+    label_topics_parser.add_argument(
+        "--no-smoothing",
+        help="To ignore words that don't cooccur with a given label rather then use "
+        "Laplacian smoothing on the joint word/label probabilty.",
+        dest="smoothing",
+        action="store_false",
+    )
+
     return parser
 
 
