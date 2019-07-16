@@ -10,6 +10,7 @@ from .io_constants import (
     BOW_DIR,
     EVOLUTION_FILENAME,
     HEATMAP_FILENAME,
+    LABELS_FILENAME,
     METRICS_FILENAME,
     REF_FILENAME,
     TOPICS_DIR,
@@ -61,6 +62,8 @@ def visualize(
     input_dir_exp = os.path.join(TOPICS_DIR, bow_name, exp_name)
     metrics_input_path = os.path.join(input_dir_exp, METRICS_FILENAME)
     check_file_exists(metrics_input_path)
+    labels_input_path = os.path.join(input_dir_exp, LABELS_FILENAME)
+    check_file_exists(labels_input_path)
 
     output_dir = os.path.join(VIZ_DIR, bow_name, exp_name)
     check_remove(output_dir, logger, force, is_dir=True)
@@ -79,6 +82,11 @@ def visualize(
     num_topics = metrics["similarity"].shape[0]
     logger.info("Loaded metrics, found %d topics." % num_topics)
 
+    logger.info("Loading topic labels ...")
+    with open(labels_input_path, "r", encoding="utf-8") as fin:
+        topic_labels = [label for label in fin.read().split("\n")]
+    logger.info("Loaded topic labels.")
+
     logger.info(
         "Creating and saving evolution plots for assignment, weight, scatter and focus "
         "per topic ..."
@@ -94,7 +102,7 @@ def visualize(
         plt.xticks(ref_ticks, refs, rotation=45)
         plt.ylabel("Metric value", fontsize=14)
         plt.ylim(0, 1)
-        plt.title("Metrics for topic %d" % (ind_topic + 1), fontsize=18)
+        plt.title("Metrics for topic '%s'" % topic_labels[ind_topic], fontsize=18)
         plt.legend(fontsize=16)
         plt.savefig(
             os.path.join(evolution_output_dir, EVOLUTION_FILENAME % (ind_topic + 1)),
@@ -111,8 +119,9 @@ def visualize(
             create_heatmap(output_path, metric, title, 0, np.max(metric), label, label)
         else:
             metric = metric.T
-            topics_ind = np.argsort(np.max(metric, axis=1))[::-1][:max_topics]
-            metric = metric[topics_ind]
+            topics = np.argsort(np.max(metric, axis=1))[::-1][:max_topics]
+            metric = metric[topics]
+            labels = [topic_labels[ind_topic] for ind_topic in topics]
             title = (
                 "Evolution of top %d topics for %s metrics per topic and version"
                 % (max_topics, metric_name)
@@ -128,7 +137,7 @@ def visualize(
                 ref_ticks,
                 [i + 0.5 for i in range(max_topics)],
                 refs,
-                ["topic %d" % (ind + 1) for ind in topics_ind],
+                labels,
             )
         logger.info(
             "Created and saved heatmap for %s metric in '%s'", metric_name, output_path
