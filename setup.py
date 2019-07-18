@@ -1,8 +1,21 @@
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from sys import exit, stderr
 from types import ModuleType
 
 from setuptools import find_packages, setup
+
+
+try:
+    import artm  # noqa: F401
+except ImportError:
+    print(
+        "BigARTM is required to install tmexp, please follow the instructions on "
+        "http://docs.bigartm.org/en/stable/installation/index.html or use the provided "
+        "Dockerfile.",
+        file=stderr,
+    )
+    exit(1)
 
 
 loader = SourceFileLoader("tmexp", "./tmexp/__init__.py")
