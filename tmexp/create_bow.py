@@ -164,7 +164,7 @@ def create_bow(
     sorted_vocabulary = sorted(
         word for word in doc_freq if word not in blacklisted_words
     )
-    word_index = {word: i for i, word in enumerate(sorted_vocabulary)}
+    word_index = {word: i for i, word in enumerate(sorted_vocabulary, start=1)}
     num_words = len(word_index)
     logger.info("Number of distinct words: %d" % num_words)
     logger.info("Saving word index ...")
