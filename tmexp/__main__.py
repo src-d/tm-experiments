@@ -327,7 +327,7 @@ def get_parser() -> argparse.ArgumentParser:
         "--doctopic-eps",
         help="Minimum document topic probability, used as tolerance when computing "
         "sparsity of the document topic matrix, defaults to %(default)s.",
-        default=0.1,
+        default=0.05,
         type=float,
     )
     train_artm_parser.add_argument(
@@ -335,6 +335,26 @@ def get_parser() -> argparse.ArgumentParser:
         help="Minimum word topic probability, used as tolerance when computing "
         "sparsity of the word topic matrix, defaults to %(default)s.",
         default=1e-4,
+        type=float,
+    )
+    train_artm_parser.add_argument(
+        "--min-prob",
+        help="Topics that do not have min-docs documents with at least this"
+        "probability will be removed, defaults to %(default)s.",
+        default=0.5,
+        type=float,
+    )
+    min_doc_group = train_artm_parser.add_mutually_exclusive_group(required=True)
+    min_doc_group.add_argument(
+        "--min-docs-abs",
+        help="Topics that do not have this amount of docs with at least min-prob"
+        "probability will be removed=.",
+        type=int,
+    )
+    min_doc_group.add_argument(
+        "--min-docs-rel",
+        help="Topics that do not have this proportion of all docs with at least "
+        "min-prob probability will be removed.",
         type=float,
     )
     train_artm_parser.add_argument(

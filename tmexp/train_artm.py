@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Dict
+from typing import Dict, Optional
 import warnings
 
 from artm import (
@@ -25,7 +25,13 @@ from .io_constants import (
     WORDTOPIC_FILENAME,
 )
 from .metrics import compute_distinctness
-from .utils import check_file_exists, check_remove, create_directory, create_logger
+from .utils import (
+    check_file_exists,
+    check_range,
+    check_remove,
+    create_directory,
+    create_logger,
+)
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -89,6 +95,9 @@ def train_artm(
     select_coeff: float,
     doctopic_eps: float,
     wordtopic_eps: float,
+    min_prob: float,
+    min_docs_abs: Optional[int],
+    min_docs_rel: Optional[float],
     quiet: bool,
     log_level: str,
 ) -> None:
@@ -96,7 +105,8 @@ def train_artm(
 
     input_dir = os.path.join(BOW_DIR, bow_name)
     check_file_exists(os.path.join(input_dir, VOCAB_FILENAME))
-    check_file_exists(os.path.join(input_dir, DOCWORD_FILENAME))
+    docword_input_path = os.path.join(input_dir, DOCWORD_FILENAME)
+    check_file_exists(docword_input_path)
 
     output_dir = os.path.join(TOPICS_DIR, bow_name, exp_name)
     doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILENAME)
@@ -106,17 +116,33 @@ def train_artm(
     create_directory(output_dir, logger)
 
     logger.info("Loading bags of words ...")
+
     batch_vectorizer = BatchVectorizer(
         collection_name="bow_tm",
         data_path=input_dir,
         data_format="bow_uci",
         batch_size=batch_size,
     )
+    with open(docword_input_path, "r", encoding="utf-8") as fin:
+        num_docs = int(fin.readline())
+        logger.info("Number of documents: %d", num_docs)
+        num_words = int(fin.readline())
+        logger.info("Number of words: %d", num_words)
+        num_rows = int(fin.readline())
+        logger.info("Number of document/word pairs: %d", num_rows)
+
     logger.info(
         "Loaded bags of words, created %d batches of up to %d documents.",
         batch_vectorizer.num_batches,
         batch_size,
     )
+
+    if min_docs_rel is None:
+        min_docs = min_docs_abs
+    else:
+        check_range(min_docs_rel, "min-docs-rel")
+        min_docs = int(num_docs * min_docs_rel)
+
     model_artm = ARTM(
         cache_theta=True,
         dictionary=batch_vectorizer.dictionary,
@@ -140,25 +166,38 @@ def train_artm(
     model_artm = loop_until_convergence(
         logger, batch_vectorizer, model_artm, converge_metric, converge_thresh, quiet
     )
+
+    logger.info("Applying selection regularization on topics ...")
     model_artm.regularizers["Sparse Topic"].tau = 0
     model_artm.regularizers["Sparse Doc"].tau = 0
     model_artm.regularizers["Decorrelator"].tau = 0
     model_artm.regularizers["Selector"].tau = select_coeff
-    logger.info("Selecting topics ...")
     model_artm = loop_until_convergence(
         logger, batch_vectorizer, model_artm, converge_metric, converge_thresh, quiet
     )
+
+    logger.info(
+        "Removing topics with less then %d documents with probability over %.2f",
+        min_docs,
+        min_prob,
+    )
+    doctopic, _, _ = model_artm.get_theta_sparse(eps=doctopic_eps)
+    doctopic = doctopic.todense()
+    topics = np.argwhere(np.sum(doctopic > min_prob, axis=1) > min_docs).flatten()
+    topic_names = [t for i, t in enumerate(model_artm.topic_names) if i in topics]
+    model_artm.reshape(topic_names)
+    if len(topics):
+        logger.info("New number of topics: %d", len(topic_names))
+    else:
+        raise RuntimeError(
+            "Removed all topics, please soften your selection criteria (aborting)."
+        )
+
+    logger.info("Inducing sparsity ...")
     model_artm.regularizers["Selector"].tau = 0
     model_artm.regularizers["Decorrelator"].tau = decor_coeff
     model_artm.regularizers["Sparse Topic"].tau = -sparse_word_coeff
     model_artm.regularizers["Sparse Doc"].tau = -sparse_doc_coeff
-    doctopic, _, _ = model_artm.get_theta_sparse(eps=doctopic_eps)
-    doctopic = doctopic.todense()
-    topics = np.argwhere((doctopic).any(1)).flatten()
-    topic_names = [t for i, t in enumerate(model_artm.topic_names) if i in topics]
-    model_artm.reshape(topic_names)
-    logger.info("New number of topics: %d", len(topic_names))
-    logger.info("Inducing sparsity ...")
     model_artm = loop_until_convergence(
         logger, batch_vectorizer, model_artm, converge_metric, converge_thresh, quiet
     )
