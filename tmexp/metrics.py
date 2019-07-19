@@ -24,6 +24,18 @@ def metric_stats(metric: np.array, num_tabs: int, logger: Logger) -> None:
         logger.info("%s%s : %.2f", num_tabs * "\t", op_name, op(metric))
 
 
+def compute_distinctness(
+    wordtopic: np.array, num_topics: int, num_words: int
+) -> np.array:
+    distinctness = np.zeros((num_topics, num_topics))
+    wordtopic += 1 / num_words
+    wordtopic /= np.sum(wordtopic, axis=1)[:, None]
+    for i, dist_i in enumerate(wordtopic):
+        for j, dist_j in enumerate(wordtopic):
+            distinctness[i, j] = np.sum(dist_i * np.log(dist_i / dist_j))
+    return (distinctness + distinctness.T) / 2
+
+
 def compute_metrics(bow_name: str, exp_name: str, force: bool, log_level: str) -> None:
 
     logger = create_logger(log_level, __name__)
@@ -63,18 +75,12 @@ def compute_metrics(bow_name: str, exp_name: str, force: bool, log_level: str) -
     num_topics, num_words = wordtopic.shape
     logger.info("Loaded, found %d words and %d topics.", num_words, num_topics)
 
-    similarity = np.zeros((num_topics, num_topics))
-    logger.info("Computing similarity between topics ...")
-    for i in range(num_topics):
-        dist_i = wordtopic[i, :]
-        for j in range(num_topics):
-            dist_j = wordtopic[j, :]
-            similarity[i, j] = np.sum(dist_i * np.log(dist_i / dist_j))
-    similarity = (similarity + similarity.T) / 2
-    logger.info("Computed similarity between topics.")
+    logger.info("Computing distinctness between topics ...")
+    distinctness = compute_distinctness(wordtopic, num_topics, num_words)
+    logger.info("Computed distinctness between topics.")
 
-    logger.info("Mean similarity per topic:")
-    metric_stats(np.sum(similarity, axis=1) / (num_topics - 1), 1, logger)
+    logger.info("Mean distinctness per topic:")
+    metric_stats(np.sum(distinctness, axis=1) / (num_topics - 1), 1, logger)
 
     assignment: np.array = np.empty((len(refs), num_topics))
     weight: np.array = np.empty((len(refs), num_topics))
@@ -109,7 +115,7 @@ def compute_metrics(bow_name: str, exp_name: str, force: bool, log_level: str) -
     with open(metrics_output_path, "wb") as fout:
         pickle.dump(
             {
-                "similarity": similarity,
+                "distinctness": distinctness,
                 "assignment": assignment,
                 "weight": weight,
                 "scatter": scatter,

@@ -79,7 +79,7 @@ def visualize(
     logger.info("Loading metrics ...")
     with open(metrics_input_path, "rb") as fin_b:
         metrics = pickle.load(fin_b)
-    num_topics = metrics["similarity"].shape[0]
+    num_topics = metrics["distinctness"].shape[0]
     logger.info("Loaded metrics, found %d topics." % num_topics)
 
     logger.info("Loading topic labels ...")
@@ -95,7 +95,7 @@ def visualize(
     for ind_topic in tqdm.tqdm(range(num_topics)):
         plt.figure(figsize=(10, 5))
         for metric_name, metric in metrics.items():
-            if metric_name == "similarity":
+            if metric_name == "distinctness":
                 continue
             plt.plot(ref_ticks, metric[:, ind_topic], "-+", label=metric_name)
         plt.xlabel("Tagged reference", fontsize=14)
@@ -113,9 +113,9 @@ def visualize(
     logger.info("Creating and saving heatmaps  per metric ...")
     for metric_name, metric in metrics.items():
         output_path = os.path.join(output_dir, HEATMAP_FILENAME % metric_name)
-        if metric_name == "similarity":
+        if metric_name == "distinctness":
             label = "Topic index"
-            title = "Topic similarity"
+            title = "Topic distinctness"
             create_heatmap(output_path, metric, title, 0, np.max(metric), label, label)
         else:
             metric = metric.T

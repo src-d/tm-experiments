@@ -63,7 +63,7 @@ def train_hdp(
     logger.info("Loading vocabulary ...")
     with open(words_input_path, "r", encoding="utf-8") as fin:
         word_index: Dict[int, str] = {
-            i: word.replace("\n", "") for i, word in enumerate(fin)
+            i: word.replace("\n", "") for i, word in enumerate(fin, start=1)
         }
     id2word = gensim.corpora.Dictionary.from_corpus(corpus, word_index)
     logger.info("Word index created.")

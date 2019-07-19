@@ -70,7 +70,7 @@ def label_topics(
         corpus = np.zeros((num_docs, num_words))
         for line in fin:
             doc_id, word_id, count = map(int, line.split())
-            corpus[doc_id, word_id] = count
+            corpus[doc_id, word_id - 1] = count
     logger.info("Loaded %d bags of words from %d %s.", num_bags, num_docs, doc_type)
     if topic_model == DIFF_MODEL:
         logger.info("Loading tagged refs ...")
