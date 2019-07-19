@@ -9,6 +9,7 @@ from .merge import merge_datasets
 from .metrics import compute_metrics
 from .postprocess import postprocess
 from .preprocess import COMMENTS, IDENTIFIERS, LITERALS, preprocess
+from .train_artm import train_artm
 from .train_hdp import train_hdp
 from .utils import check_create_default, SUPPORTED_LANGUAGES
 from .visualize import visualize
@@ -258,6 +259,90 @@ def get_parser() -> argparse.ArgumentParser:
         help="Lower bound on the right side of convergence.",
         default=0.0001,
         type=float,
+    )
+    # ------------------------------------------------------------------------
+
+    train_artm_parser = subparsers.add_parser(
+        "train_artm", help="Train ARTM model from the input BoW."
+    )
+    train_artm_parser.set_defaults(handler=train_artm)
+
+    add_bow_arg(train_artm_parser, required=True)
+    add_experiment_arg(train_artm_parser, required=False)
+    add_force_arg(train_artm_parser)
+    train_artm_parser.add_argument(
+        "--batch-size",
+        help="Number of documents to be stored in each batch, defaults to %(default)s.",
+        default=1000,
+        type=int,
+    )
+    train_artm_parser.add_argument(
+        "--max-topic",
+        help="Maximum number of topics, used as initial value.",
+        default=200,
+        type=int,
+    )
+    train_artm_parser.add_argument(
+        "--converge-thresh",
+        help="When the selection metric does not improve more then this between passes "
+        "we assume convergence, defaults to %(default)s.",
+        default=0.001,
+        type=float,
+    )
+    train_artm_parser.add_argument(
+        "--converge-metric",
+        help="Selection metric to use.",
+        choices=["perplexity", "distinctness"],
+        default="distinctness",
+    )
+    train_artm_parser.add_argument(
+        "--sparse-word-coeff",
+        help="Coefficient used by the sparsity inducing regularizer for the word topic "
+        "distribution (phi) defaults to %(default)s.",
+        default=0.5,
+        type=float,
+    )
+    train_artm_parser.add_argument(
+        "--sparse-doc-coeff",
+        help="Coefficient used by the sparsity inducing regularizer for the doc topic "
+        "distribution (theta), defaults to %(default)s.",
+        default=0.5,
+        type=float,
+    )
+    train_artm_parser.add_argument(
+        "--decor-coeff",
+        help="Coefficient used by the topic decorrelation regularizer, defaults to "
+        "%(default)s.",
+        default=1e5,
+        type=float,
+    )
+    train_artm_parser.add_argument(
+        "--select-coeff",
+        help="Coefficient used by the topic selection regularizer, defaults to "
+        "%(default)s.",
+        default=0.1,
+        type=float,
+    )
+    train_artm_parser.add_argument(
+        "--doctopic-eps",
+        help="Minimum document topic probability, used as tolerance when computing "
+        "sparsity of the document topic matrix, defaults to %(default)s.",
+        default=0.1,
+        type=float,
+    )
+    train_artm_parser.add_argument(
+        "--wordtopic-eps",
+        help="Minimum word topic probability, used as tolerance when computing "
+        "sparsity of the word topic matrix, defaults to %(default)s.",
+        default=1e-4,
+        type=float,
+    )
+    train_artm_parser.add_argument(
+        "-q",
+        "--quiet",
+        help="To only output scores of first and last iteration during each training "
+        "phases",
+        action="store_true",
     )
     # ------------------------------------------------------------------------
 
