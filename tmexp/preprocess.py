@@ -23,7 +23,11 @@ import pymysql
 import pymysql.cursors
 import tqdm
 
-from .gitbase_queries import FILE_CONTENT, FILE_INFO, TAGGED_REFS
+from .gitbase_queries import (
+    get_file_content_sql,
+    get_file_info_sql,
+    get_tagged_refs_sql,
+)
 from .io_constants import DATASET_DIR
 from .utils import (
     check_env_exists,
@@ -95,10 +99,12 @@ def preprocess(
     repo: str,
     dataset_name: str,
     exclude_refs: List[str],
+    only_head: bool,
     only_by_date: bool,
     version_sep: str,
     langs: Optional[List[str]],
     exclude_langs: Optional[List[str]],
+    keep_vendors: bool,
     features: List[str],
     force: bool,
     tokenize: bool,
@@ -134,34 +140,42 @@ def preprocess(
 
     logger.info("Processing repository '%s'" % repo)
     logger.info("Retrieving tagged references ...")
-    sql = TAGGED_REFS % repo
+    sql = get_tagged_refs_sql(repository_id=repo)
     refs_dict: DefaultDict[int, DefaultDict[int, List[str]]] = defaultdict(
         lambda: defaultdict(list)
     )
-    refs = [
-        row["ref_name"].decode() for row in extract(host, port, user, password, sql)
-    ]
-    for keyword in exclude_refs:
-        refs = [ref for ref in refs if keyword not in ref]
-    if not only_by_date:
-        for ref in refs:
-            major, minor = [
-                int(re.findall(r"[0-9]+", version)[0])
-                for version in ref.split(version_sep)[:2]
-            ]
-            refs_dict[major][minor].append(ref)
+    if only_head:
+        refs = ["HEAD"]
+        logger.info("Only extracting HEAD revision.")
+    else:
         refs = [
-            ref
-            for major in sorted(refs_dict)
-            for minor in sorted(refs_dict[major])
-            for ref in refs_dict[major][minor]
+            row["ref_name"].decode() for row in extract(host, port, user, password, sql)
         ]
-    logger.info("Found %d tagged references." % len(refs))
+        for keyword in exclude_refs:
+            refs = [ref for ref in refs if keyword not in ref]
+        if not only_by_date:
+            for ref in refs:
+                major, minor = [
+                    int(re.findall(r"[0-9]+", version)[0])
+                    for version in ref.split(version_sep)[:2]
+                ]
+                refs_dict[major][minor].append(ref)
+            refs = [
+                ref
+                for major in sorted(refs_dict)
+                for minor in sorted(refs_dict[major])
+                for ref in refs_dict[major][minor]
+            ]
+        logger.info("Found %d tagged references." % len(refs))
 
-    languages = ",".join(
-        "'%s'" % lang for lang in create_language_list(langs, exclude_langs)
+    used_langs = create_language_list(langs, exclude_langs)
+    exclude_vendors = not keep_vendors
+    sql = get_file_info_sql(
+        repository_id=repo,
+        ref_names=refs,
+        exclude_vendors=exclude_vendors,
+        langs=used_langs,
     )
-    sql = FILE_INFO % (repo, ",".join("'%s'" % ref for ref in refs), languages)
     files_info: Dict[str, Dict[str, Dict[str, str]]] = {ref: {} for ref in refs}
     lang_count: CounterType[str] = Counter()
     seen_files: Set[Tuple[str, str]] = set()
@@ -177,7 +191,11 @@ def preprocess(
             lang_count[lang] += 1
             seen_files.add((file_path, blob_hash))
         files_info[ref][file_path] = {"blob_hash": blob_hash, "language": lang}
-    logger.info("Found %d parsable blobs:" % raw_count)
+    if raw_count:
+        logger.info("Found %d parsable blobs:" % raw_count)
+    else:
+        logger.info("Found no parsable blobs, stopping.")
+        return
     for ref in refs:
         logger.info("   '%s' : %d blobs.", ref, len(files_info[ref]))
     logger.info("Found %d distinct parsable blobs:" % len(seen_files))
@@ -185,7 +203,12 @@ def preprocess(
         logger.info("   %s : %d files.", lang, lang_count[lang])
 
     files_content: Dict[str, Dict[str, Any]] = defaultdict(dict)
-    sql = FILE_CONTENT % (repo, ",".join("'%s'" % ref for ref in refs), languages)
+    sql = get_file_content_sql(
+        repository_id=repo,
+        ref_names=refs,
+        exclude_vendors=exclude_vendors,
+        langs=used_langs,
+    )
     if stem:
         stemmer = PorterStemmer()
     blacklisted_files: Set[str] = set()
@@ -278,9 +301,9 @@ def preprocess(
             parsed_count[lang] * 100 / lang_count[lang],
         )
     output_dict = {
-        "files_info": dict(files_info),
-        "files_content": dict(files_content),
-        "refs": refs,
+        "files_info": {repo: dict(files_info)},
+        "files_content": {repo: dict(files_content)},
+        "refs": {repo: refs},
     }
     logger.info("Saving features ...")
     with open(output_path, "wb") as fout:

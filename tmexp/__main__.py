@@ -133,6 +133,12 @@ def get_parser() -> argparse.ArgumentParser:
         default=[],
     )
     preprocess_parser.add_argument(
+        "--keep-vendors", help="Keep vendors in processed files.", action="store_true"
+    )
+    preprocess_parser.add_argument(
+        "--only-head", help="Preprocess only the head revision.", action="store_true"
+    )
+    preprocess_parser.add_argument(
         "--only-by-date",
         help="To sort the references only by date (may cause errors).",
         action="store_true",
@@ -371,6 +377,13 @@ def get_parser() -> argparse.ArgumentParser:
         help="Compute document word count and membership given a topic model.",
     )
     postprocess_parser.set_defaults(handler=postprocess)
+    # TODO(https://github.com/src-d/tm-experiments/issues/21)
+    postprocess_parser.add_argument(
+        "--original-document-index",
+        action="store_true",
+        help="Use the original document index instead of the workaround computed "
+        "during ARTM training.",
+    )
     add_bow_arg(postprocess_parser, required=True)
     add_experiment_arg(postprocess_parser, required=True)
     add_force_arg(postprocess_parser)

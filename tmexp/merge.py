@@ -3,7 +3,7 @@ import pickle
 from typing import Any, Dict, List
 
 from .io_constants import DATASET_DIR
-from .utils import check_file_exists, check_remove, create_logger
+from .utils import check_file_exists, check_remove, create_logger, recursive_update
 
 
 def merge_datasets(
@@ -30,11 +30,15 @@ def merge_datasets(
     for input_path in input_paths:
         with open(input_path, "rb") as fin:
             input_dict = pickle.load(fin)
-        if "refs" not in output_dict:
-            output_dict.update(input_dict)
-        else:
-            output_dict["files_info"].update(input_dict["files_info"])
-            output_dict["files_content"].update(input_dict["files_content"])
+        for repo, refs in input_dict["refs"].items():
+            if len(refs) > 1:
+                logger.warning(
+                    "Found %d references for repository %s. Please make sure you "
+                    "intended to merge several revisions.",
+                    len(refs),
+                    repo,
+                )
+        recursive_update(output_dict, input_dict)
     logger.info("Merged %d datasets." % len(input_paths))
 
     logger.info("Saving merged dataset ...")

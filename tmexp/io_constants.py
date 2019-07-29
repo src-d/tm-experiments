@@ -8,6 +8,8 @@ VOCAB_FILENAME = "vocab.bow_tm.txt"
 
 TOPICS_DIR = "/data/topics"
 DOCTOPIC_FILENAME = "doctopic.npy"
+# TODO(https://github.com/src-d/tm-experiments/issues/21)
+DOC_ARTM_FILENAME = "doc.artm.txt"
 WORDTOPIC_FILENAME = "wordtopic.npy"
 MEMBERSHIP_FILENAME = "membership.pkl"
 WORDCOUNT_FILENAME = "wordcount.pkl"
