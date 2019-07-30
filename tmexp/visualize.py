@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import os
 import pickle
 from typing import List, Optional
@@ -6,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tqdm
 
+from .cli import CLIBuilder, register_command
 from .io_constants import (
     BOW_DIR,
     EVOLUTION_FILENAME,
@@ -17,6 +19,20 @@ from .io_constants import (
     VIZ_DIR,
 )
 from .utils import check_file_exists, check_remove, create_directory, create_logger
+
+
+def _define_parser(parser: ArgumentParser) -> None:
+    cli_builder = CLIBuilder(parser)
+    cli_builder.add_bow_arg(required=True)
+    cli_builder.add_experiment_arg(required=True)
+    cli_builder.add_force_arg()
+    parser.add_argument(
+        "--max-topics",
+        help="Limit to this amount the number of topics displayed on visualizations "
+        "simultaniously (will select most interesting), defaults to %(default)s.",
+        default=10,
+        type=int,
+    )
 
 
 def create_heatmap(
@@ -48,10 +64,11 @@ def create_heatmap(
     plt.savefig(output_path, bbox_inches="tight")
 
 
+@register_command(parser_definer=_define_parser)
 def visualize(
     bow_name: str, exp_name: str, force: bool, max_topics: int, log_level: str
 ) -> None:
-
+    """Create visualizations for precomputed metrics."""
     # TODO: include topic names when inference is added
 
     logger = create_logger(log_level, __name__)

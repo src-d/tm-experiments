@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import logging
 import os
 from typing import Dict, Optional
@@ -16,6 +17,7 @@ from artm import (
 )
 import numpy as np
 
+from .cli import CLIBuilder, register_command
 from .io_constants import (
     BOW_DIR,
     DOC_ARTM_FILENAME,
@@ -36,6 +38,107 @@ from .utils import (
 )
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+
+def _define_parser(parser: ArgumentParser) -> None:
+    cli_builder = CLIBuilder(parser)
+    cli_builder.add_bow_arg(required=True)
+    cli_builder.add_experiment_arg(required=False)
+    cli_builder.add_force_arg()
+    parser.add_argument(
+        "--batch-size",
+        help="Number of documents to be stored in each batch, defaults to %(default)s.",
+        default=1000,
+        type=int,
+    )
+    parser.add_argument(
+        "--max-topic",
+        help="Maximum number of topics, used as initial value.",
+        default=200,
+        type=int,
+    )
+    parser.add_argument(
+        "--converge-thresh",
+        help="When the selection metric does not improve more then this between passes "
+        "we assume convergence, defaults to %(default)s.",
+        default=0.001,
+        type=float,
+    )
+    parser.add_argument(
+        "--converge-metric",
+        help="Selection metric to use.",
+        choices=["perplexity", "distinctness"],
+        default="distinctness",
+    )
+    parser.add_argument(
+        "--sparse-word-coeff",
+        help="Coefficient used by the sparsity inducing regularizer for the word topic "
+        "distribution (phi) defaults to %(default)s.",
+        default=0.5,
+        type=float,
+    )
+    parser.add_argument(
+        "--sparse-doc-coeff",
+        help="Coefficient used by the sparsity inducing regularizer for the doc topic "
+        "distribution (theta), defaults to %(default)s.",
+        default=0.5,
+        type=float,
+    )
+    parser.add_argument(
+        "--decor-coeff",
+        help="Coefficient used by the topic decorrelation regularizer, defaults to "
+        "%(default)s.",
+        default=1e5,
+        type=float,
+    )
+    parser.add_argument(
+        "--select-coeff",
+        help="Coefficient used by the topic selection regularizer, defaults to "
+        "%(default)s.",
+        default=0.1,
+        type=float,
+    )
+    parser.add_argument(
+        "--doctopic-eps",
+        help="Minimum document topic probability, used as tolerance when computing "
+        "sparsity of the document topic matrix, defaults to %(default)s.",
+        default=0.05,
+        type=float,
+    )
+    parser.add_argument(
+        "--wordtopic-eps",
+        help="Minimum word topic probability, used as tolerance when computing "
+        "sparsity of the word topic matrix, defaults to %(default)s.",
+        default=1e-4,
+        type=float,
+    )
+    parser.add_argument(
+        "--min-prob",
+        help="Topics that do not have min-docs documents with at least this"
+        "probability will be removed, defaults to %(default)s.",
+        default=0.5,
+        type=float,
+    )
+    min_doc_group = parser.add_mutually_exclusive_group(required=True)
+    min_doc_group.add_argument(
+        "--min-docs-abs",
+        help="Topics that do not have this amount of docs with at least min-prob"
+        "probability will be removed=.",
+        type=int,
+    )
+    min_doc_group.add_argument(
+        "--min-docs-rel",
+        help="Topics that do not have this proportion of all docs with at least "
+        "min-prob probability will be removed.",
+        type=float,
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        help="To only output scores of first and last iteration during each training "
+        "phases",
+        action="store_true",
+    )
 
 
 def print_scores(
@@ -83,6 +186,7 @@ def loop_until_convergence(
     return model_artm
 
 
+@register_command(parser_definer=_define_parser)
 def train_artm(
     bow_name: str,
     exp_name: str,
@@ -103,6 +207,7 @@ def train_artm(
     quiet: bool,
     log_level: str,
 ) -> None:
+    """Train ARTM model from the input BoW."""
     logger = create_logger(log_level, __name__)
 
     input_dir = os.path.join(BOW_DIR, bow_name)

@@ -1,15 +1,29 @@
+from argparse import ArgumentParser
 import os
 import pickle
 from typing import Any, Dict, List
 
+from .cli import CLIBuilder, register_command
 from .io_constants import DATASET_DIR
 from .utils import check_file_exists, check_remove, create_logger, recursive_update
 
 
-def merge_datasets(
+def _define_parser(parser: ArgumentParser) -> None:
+    cli_builder = CLIBuilder(parser)
+    cli_builder.add_force_arg()
+    parser.add_argument(
+        "-i", "--input-datasets", help="Datasets to merge.", nargs="*", required=True
+    )
+    parser.add_argument(
+        "-o", "--output-dataset", help="Name of the output dataset.", required=True
+    )
+
+
+@register_command(parser_definer=_define_parser)
+def merge(
     input_datasets: List[str], output_dataset: str, force: bool, log_level: str
 ) -> None:
-
+    """Merge multiple datasets."""
     if len(input_datasets) < 2:
         raise RuntimeError("Less then 2 datasets were given, aborting.")
 

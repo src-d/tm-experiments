@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from collections import Counter, defaultdict
 import os
 import pickle
@@ -5,6 +6,7 @@ from typing import Counter as CounterType, DefaultDict, Dict, List
 
 import numpy as np
 
+from .cli import CLIBuilder, register_command
 from .create_bow import DIFF_MODEL, HALL_MODEL, SEP
 from .io_constants import (
     BOW_DIR,
@@ -20,6 +22,21 @@ from .io_constants import (
 from .utils import check_file_exists, check_remove, create_logger
 
 
+def _define_parser(parser: ArgumentParser) -> None:
+    cli_builder = CLIBuilder(parser)
+    cli_builder.add_bow_arg(required=True)
+    cli_builder.add_experiment_arg(required=True)
+    cli_builder.add_force_arg()
+    # TODO(https://github.com/src-d/tm-experiments/issues/21)
+    parser.add_argument(
+        "--original-document-index",
+        action="store_true",
+        help="Use the original document index instead of the workaround computed "
+        "during ARTM training.",
+    )
+
+
+@register_command(parser_definer=_define_parser)
 def postprocess(
     bow_name: str,
     exp_name: str,
@@ -28,7 +45,7 @@ def postprocess(
     original_document_index: bool,
     log_level: str,
 ) -> None:
-
+    """Compute document word count and membership given a topic model."""
     logger = create_logger(log_level, __name__)
 
     input_dir_bow = os.path.join(BOW_DIR, bow_name)

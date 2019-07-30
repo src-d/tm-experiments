@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import os
 from typing import Dict, List, Tuple
 
@@ -5,6 +6,7 @@ import gensim
 import numpy as np
 import tqdm
 
+from .cli import CLIBuilder, register_command
 from .io_constants import (
     BOW_DIR,
     DOCTOPIC_FILENAME,
@@ -16,6 +18,56 @@ from .io_constants import (
 from .utils import check_file_exists, check_remove, create_directory, create_logger
 
 
+def _define_parser(parser: ArgumentParser) -> None:
+    cli_builder = CLIBuilder(parser)
+    cli_builder.add_bow_arg(required=True)
+    cli_builder.add_experiment_arg(required=False)
+    cli_builder.add_force_arg()
+
+    parser.add_argument(
+        "--chunk-size", help="Number of documents in one chunk.", default=256, type=int
+    )
+    parser.add_argument(
+        "--kappa",
+        help="Learning parameter which acts as exponential decay factor to influence "
+        "extent of learning from each batch.",
+        default=1.0,
+        type=float,
+    )
+    parser.add_argument(
+        "--tau",
+        help="Learning parameter which down-weights early iterations of documents.",
+        default=64.0,
+        type=float,
+    )
+    parser.add_argument(
+        "--K", help="Document level truncation level.", default=15, type=int
+    )
+    parser.add_argument(
+        "--T", help="Topic level truncation level.", default=150, type=int
+    )
+    parser.add_argument(
+        "--alpha", help="Document level concentration.", default=1, type=int
+    )
+    parser.add_argument(
+        "--gamma", help="Topic level concentration.", default=1, type=int
+    )
+    parser.add_argument("--eta", help="Topic Dirichlet.", default=0.01, type=float)
+    parser.add_argument(
+        "--scale",
+        help="Weights information from the mini-chunk of corpus to calculate rhot.",
+        default=1.0,
+        type=float,
+    )
+    parser.add_argument(
+        "--var-converge",
+        help="Lower bound on the right side of convergence.",
+        default=0.0001,
+        type=float,
+    )
+
+
+@register_command(parser_definer=_define_parser)
 def train_hdp(
     bow_name: str,
     exp_name: str,
@@ -32,6 +84,7 @@ def train_hdp(
     var_converge: float,
     log_level: str,
 ) -> None:
+    """Train an HDP model from the input BoW."""
     logger = create_logger(log_level, __name__)
 
     input_dir = os.path.join(BOW_DIR, bow_name)

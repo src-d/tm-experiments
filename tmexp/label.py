@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from collections import defaultdict
 import itertools
 import os
@@ -5,6 +6,7 @@ from typing import Dict, List, Union
 
 import numpy as np
 
+from .cli import CLIBuilder, register_command
 from .create_bow import DIFF_MODEL, HALL_MODEL, SEP
 from .io_constants import (
     BOW_DIR,
@@ -19,7 +21,49 @@ from .io_constants import (
 from .utils import check_file_exists, check_range, check_remove, create_logger
 
 
-def label_topics(
+def _define_parser(parser: ArgumentParser) -> None:
+    cli_builder = CLIBuilder(parser)
+    cli_builder.add_bow_arg(required=True)
+    cli_builder.add_experiment_arg(required=True)
+    cli_builder.add_force_arg()
+    parser.add_argument(
+        "--mu",
+        help="Weights how discriminative we want the label to be relative to other"
+        " topics , defaults to %(default)s.",
+        default=1.0,
+        type=float,
+    )
+    parser.add_argument(
+        "--label-size",
+        help="Number of words in a label, defaults to %(default)s.",
+        default=2,
+        type=int,
+    )
+    parser.add_argument(
+        "--min-prob",
+        help="Admissible words for a topic label must have a topic probability over "
+        "this value, defaults to %(default)s.",
+        default=0.001,
+        type=float,
+    )
+    parser.add_argument(
+        "--max-topics",
+        help="Admissible words for a topic label must be admissible for less then this"
+        " amount of topics, defaults to %(default)s.",
+        default=10,
+        type=int,
+    )
+    parser.add_argument(
+        "--no-smoothing",
+        help="To ignore words that don't cooccur with a given label rather then use "
+        "Laplacian smoothing on the joint word/label probabilty.",
+        dest="smoothing",
+        action="store_false",
+    )
+
+
+@register_command(parser_definer=_define_parser)
+def label(
     bow_name: str,
     exp_name: str,
     force: bool,
@@ -30,6 +74,7 @@ def label_topics(
     max_topics: int,
     smoothing: bool,
 ) -> None:
+    """Infer a label for each topic automatically given a topic model."""
     logger = create_logger(log_level, __name__)
     input_dir_bow = os.path.join(BOW_DIR, bow_name)
     doc_input_path = os.path.join(input_dir_bow, DOC_FILENAME)
