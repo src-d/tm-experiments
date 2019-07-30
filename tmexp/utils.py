@@ -1,9 +1,15 @@
+from collections.abc import Mapping, MutableMapping
 import logging
 from logging import Handler, Logger, LogRecord, NOTSET
 import os
 import shutil
 import time
-from typing import List, Optional
+from typing import (
+    List,
+    Mapping as MappingType,
+    MutableMapping as MutableMappingType,
+    Optional,
+)
 
 import tqdm
 
@@ -116,3 +122,18 @@ def create_language_list(
         if exclude_langs is not None:
             langs = [lang for lang in langs if lang not in exclude_langs]
     return langs
+
+
+def recursive_update(d: MutableMappingType, u: MappingType) -> None:
+    def recursive_worker(d: MutableMappingType, u: MappingType) -> MutableMappingType:
+        for k, v in u.items():
+            dv = d.get(k, {})
+            if not isinstance(dv, MutableMapping):
+                d[k] = v
+            elif isinstance(v, Mapping):
+                d[k] = recursive_worker(dv, v)
+            else:
+                d[k] = v
+        return d
+
+    recursive_worker(d, u)

@@ -18,6 +18,8 @@ import numpy as np
 
 from .io_constants import (
     BOW_DIR,
+    DOC_ARTM_FILENAME,
+    DOC_FILENAME,
     DOCTOPIC_FILENAME,
     DOCWORD_FILENAME,
     TOPICS_DIR,
@@ -107,8 +109,12 @@ def train_artm(
     check_file_exists(os.path.join(input_dir, VOCAB_FILENAME))
     docword_input_path = os.path.join(input_dir, DOCWORD_FILENAME)
     check_file_exists(docword_input_path)
+    doc_input_path = os.path.join(input_dir, DOC_FILENAME)
+    check_file_exists(doc_input_path)
 
     output_dir = os.path.join(TOPICS_DIR, bow_name, exp_name)
+    doc_output_path = os.path.join(output_dir, DOC_ARTM_FILENAME)
+    check_remove(doc_output_path, logger, force)
     doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILENAME)
     check_remove(doctopic_output_path, logger, force)
     wordtopic_output_path = os.path.join(output_dir, WORDTOPIC_FILENAME)
@@ -130,6 +136,9 @@ def train_artm(
         logger.info("Number of words: %d", num_words)
         num_rows = int(fin.readline())
         logger.info("Number of document/word pairs: %d", num_rows)
+
+    with open(doc_input_path, "r", encoding="utf8") as fin:
+        doc_names = fin.read().splitlines()
 
     logger.info(
         "Loaded bags of words, created %d batches of up to %d documents.",
@@ -177,7 +186,7 @@ def train_artm(
     )
 
     logger.info(
-        "Removing topics with less then %d documents with probability over %.2f",
+        "Removing topics with less than %d documents with probability over %.2f.",
         min_docs,
         min_prob,
     )
@@ -203,12 +212,16 @@ def train_artm(
     )
 
     logger.info("Finished training.")
-    doctopic, _, _ = model_artm.get_theta_sparse()
+    # TODO(https://github.com/src-d/tm-experiments/issues/21)
+    doctopic, _, doc_indexes = model_artm.get_theta_sparse()
     doctopic = doctopic.todense()
+    with open(doc_output_path, "w", encoding="utf8") as fout:
+        fout.write(
+            "%s\n" % "\n".join(doc_names[doc_index] for doc_index in doc_indexes)
+        )
     logger.info("Saving topics per document ...")
     np.save(doctopic_output_path, doctopic.T)
     logger.info("Saved topics per document in '%s'.", doctopic_output_path)
-
     wordtopic, _, _ = model_artm.get_phi_dense()
     logger.info("Saving word/topic distribution ...")
     np.save(wordtopic_output_path, wordtopic.T)
