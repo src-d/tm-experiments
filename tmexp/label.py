@@ -56,7 +56,7 @@ def _define_parser(parser: ArgumentParser) -> None:
     parser.add_argument(
         "--no-smoothing",
         help="To ignore words that don't cooccur with a given label rather then use "
-        "Laplacian smoothing on the joint word/label probabilty.",
+        "Laplace smoothing on the joint word/label probabilty.",
         dest="smoothing",
         action="store_false",
     )

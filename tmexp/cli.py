@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 from collections import OrderedDict
 from logging import _nameToLevel as logging_name_to_level
-from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple
+from typing import Any, Callable, Dict, NamedTuple, Tuple
 
 from .utils import check_create_default, SUPPORTED_LANGUAGES
 
@@ -16,25 +16,26 @@ _commands: Dict[str, CommandDescription] = OrderedDict()
 
 
 def register_command(
-    *,
-    parser_definer: Callable[[ArgumentParser], None],
-    name: Optional[str] = None,
-    help: Optional[str] = None
+    *, parser_definer: Callable[[ArgumentParser], None]
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     def wrapper(handler: Callable[..., Any]) -> Callable[..., Any]:
+        name = handler.__name__.replace("_", "-")
+
+        def error() -> None:
+            raise RuntimeError(
+                "Could not register command %s: its handler lacks a docstring to build "
+                "its help message." % name
+            )
+
+        help = handler.__doc__
         if help is None:
-            final_help = handler.__doc__.strip()
-            if not final_help:
-                raise RuntimeError(
-                    "Could not register the command %s, please provide a help "
-                    "or a docstring." % name
-                )
-            final_help = final_help.splitlines()[0].strip()
-        else:
-            final_help = help
-        final_name = handler.__name__.replace("_", "-") if name is None else name
-        _commands[final_name] = CommandDescription(
-            help=final_help, parser_definer=parser_definer, handler=handler
+            error()
+        help = help.strip()
+        if not help:
+            error()
+        help = help.splitlines()[0].strip()
+        _commands[name] = CommandDescription(
+            help=help, parser_definer=parser_definer, handler=handler
         )
         return handler
 
@@ -43,17 +44,17 @@ def register_command(
 
 def _define_parser() -> ArgumentParser:
     parser = ArgumentParser()
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        choices=logging_name_to_level,
-        help="Logging verbosity.",
-    )
     subparsers = parser.add_subparsers(help="Commands")
     for name, (help, parser_definer, handler) in _commands.items():
         subparser = subparsers.add_parser(name, help=help)
         subparser.set_defaults(handler=handler)
         parser_definer(subparser)
+        subparser.add_argument(
+            "--log-level",
+            default="INFO",
+            choices=logging_name_to_level,
+            help="Logging verbosity.",
+        )
     return parser
 
 
@@ -115,14 +116,14 @@ class CLIBuilder:
             )
 
     def add_bow_arg(self, required: bool) -> None:
-        help = "Name of the BoW created by `create_bow`%s."
+        help = "Name of the BoW created by `create-bow`%s."
         if required:
             self._add_required("--bow-name", help % "")
         else:
             self._add_default("--bow-name", help % ", defaults to '%(default)s'", "bow")
 
     def add_experiment_arg(self, required: bool) -> None:
-        help = "Name of the experiment created by `train_$`%s."
+        help = "Name of the experiment created by `train-$`%s."
         if required:
             self._add_required("--exp-name", help % "")
         else:
