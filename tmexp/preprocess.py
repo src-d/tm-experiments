@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from collections import Counter, defaultdict
 import os
 import pickle
@@ -23,6 +24,7 @@ import pymysql
 import pymysql.cursors
 import tqdm
 
+from .cli import CLIBuilder, register_command
 from .gitbase_queries import (
     get_file_content_sql,
     get_file_info_sql,
@@ -56,6 +58,56 @@ FEATURE_MAPPING = {
     LITERAL_XPATH: (LITERAL_KEY, LITERALS),
     COMMENT_XPATH: (COMMENT_KEY, COMMENT_XPATH),
 }
+
+
+def _define_parser(parser: ArgumentParser) -> None:
+    cli_builder = CLIBuilder(parser)
+    cli_builder.add_dataset_arg(required=False)
+    cli_builder.add_feature_arg()
+    cli_builder.add_force_arg()
+    cli_builder.add_lang_args()
+
+    parser.add_argument(
+        "-r", "--repo", help="Name of the repo to preprocess.", required=True
+    )
+    parser.add_argument(
+        "--exclude-refs",
+        help="All refs containing one of these keywords will be excluded "
+        "(e.g. all refs with `alpha`).",
+        nargs="*",
+        default=[],
+    )
+    parser.add_argument(
+        "--keep-vendors", help="Keep vendors in processed files.", action="store_true"
+    )
+    parser.add_argument(
+        "--only-head", help="Preprocess only the head revision.", action="store_true"
+    )
+    parser.add_argument(
+        "--only-by-date",
+        help="To sort the references only by date (may cause errors).",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--version-sep",
+        help="If sorting by version, provide the seperator between major and minor.",
+        default=".",
+    )
+    parser.add_argument(
+        "--no-tokenize",
+        help="To skip tokenization.",
+        dest="tokenize",
+        action="store_false",
+    )
+    parser.add_argument(
+        "--no-stem", help="To skip stemming.", dest="stem", action="store_false"
+    )
+    parser.add_argument(
+        "--bblfsh-timeout",
+        help="Timeout for parse requests made to Babelfish.",
+        type=float,
+        default=10.0,
+    )
 
 
 def remove_file_from_dict(
@@ -95,6 +147,7 @@ def extract(
         connection.close()
 
 
+@register_command(parser_definer=_define_parser)
 def preprocess(
     repo: str,
     dataset_name: str,
@@ -112,6 +165,8 @@ def preprocess(
     bblfsh_timeout: float,
     log_level: str,
 ) -> None:
+    """Extract features from a repository and store them as a pickled dict."""
+
     def feature_extractor(uast_obj: Any) -> Iterator[Tuple[str, str]]:
         if type(uast_obj) == dict:
             if "@type" in uast_obj and uast_obj["@type"] in feature_mapping:

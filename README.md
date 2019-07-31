@@ -54,7 +54,7 @@ Once your job is finished, the output file should be located in `/path/to/data/d
 You can launch the bag-of-words creation with the following command (don't forget to specify the dataset name):
 
 ```
-docker run --rm -it -v /path/to/data:/data tmexp create_bow --topic-model diff --dataset-name my-dataset --bow-name my-bow
+docker run --rm -it -v /path/to/data:/data tmexp create-bow --topic-model diff --dataset-name my-dataset --bow-name my-bow
 ```
 
 Once your job is finished, the output files should be located in `/path/to/data/bows/my-bow/`
@@ -64,7 +64,7 @@ Once your job is finished, the output files should be located in `/path/to/data/
 You can launch the training with the following command (don't forget to specify the bow name):
 
 ```
-docker run --rm -it -v /path/to/data:/data tmexp train_hdp --bow-name my-bow --exp-name my-exp
+docker run --rm -it -v /path/to/data:/data tmexp train-hdp --bow-name my-bow --exp-name my-exp
 ```
 
 Once your job is finished, the output files should be located in `/path/to/data/topics/my-bow/my-exp`.

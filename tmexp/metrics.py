@@ -1,9 +1,11 @@
+from argparse import ArgumentParser
 from logging import Logger
 import os
 import pickle
 
 import numpy as np
 
+from .cli import CLIBuilder, register_command
 from .io_constants import (
     BOW_DIR,
     MEMBERSHIP_FILENAME,
@@ -14,6 +16,13 @@ from .io_constants import (
     WORDTOPIC_FILENAME,
 )
 from .utils import check_file_exists, check_remove, create_logger
+
+
+def _define_parser(parser: ArgumentParser) -> None:
+    cli_builder = CLIBuilder(parser)
+    cli_builder.add_bow_arg(required=True)
+    cli_builder.add_experiment_arg(required=True)
+    cli_builder.add_force_arg()
 
 
 def metric_stats(metric: np.array, num_tabs: int, logger: Logger) -> None:
@@ -36,8 +45,9 @@ def compute_distinctness(
     return (distinctness + distinctness.T) / 2
 
 
+@register_command(parser_definer=_define_parser)
 def compute_metrics(bow_name: str, exp_name: str, force: bool, log_level: str) -> None:
-
+    """Compute metrics given topic distributions over each version."""
     logger = create_logger(log_level, __name__)
 
     input_dir_bow = os.path.join(BOW_DIR, bow_name)

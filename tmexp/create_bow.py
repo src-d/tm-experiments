@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from collections import Counter, defaultdict
 import os
 import pickle
@@ -5,6 +6,7 @@ from typing import Any, Counter as CounterType, DefaultDict, Dict, List, Optiona
 
 import tqdm
 
+from .cli import CLIBuilder, register_command
 from .io_constants import (
     BOW_DIR,
     DATASET_DIR,
@@ -27,6 +29,37 @@ HALL_MODEL = "hall"
 SEP = ":"
 
 
+def _define_parser(parser: ArgumentParser) -> None:
+    cli_builder = CLIBuilder(parser)
+    cli_builder.add_bow_arg(required=False)
+    cli_builder.add_dataset_arg(required=True)
+    cli_builder.add_feature_arg()
+    cli_builder.add_force_arg()
+    cli_builder.add_lang_args()
+
+    parser.add_argument(
+        "--topic-model",
+        help="Topic evolution model to use.",
+        required=True,
+        choices=[DIFF_MODEL, HALL_MODEL],
+    )
+    parser.add_argument(
+        "--min-word-frac",
+        help="Words occuring in less then this draction of all documents are removed,"
+        " defaults to %(default)s.",
+        type=float,
+        default=0.02,
+    )
+    parser.add_argument(
+        "--max-word-frac",
+        help="Words occuring in more then this fraction of all documents are removed,"
+        " defaults to %(default)s.",
+        type=float,
+        default=0.8,
+    )
+
+
+@register_command(parser_definer=_define_parser)
 def create_bow(
     dataset_name: str,
     bow_name: str,
@@ -39,6 +72,7 @@ def create_bow(
     max_word_frac: float,
     log_level: str,
 ) -> None:
+    """Create the BoW dataset from a pickled dict, in UCI format."""
     logger = create_logger(log_level, __name__)
 
     input_path = os.path.join(DATASET_DIR, dataset_name + ".pkl")
