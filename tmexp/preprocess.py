@@ -30,7 +30,14 @@ from .gitbase_queries import (
     get_file_info_sql,
     get_tagged_refs_sql,
 )
-from .io_constants import DATASET_DIR
+from .io_constants import (
+    Dataset,
+    DATASET_DIR,
+    FeatureContent,
+    FileInfo,
+    FilesContent,
+    FilesInfo,
+)
 from .utils import (
     check_env_exists,
     check_remove,
@@ -108,22 +115,6 @@ def _define_parser(parser: ArgumentParser) -> None:
         type=float,
         default=10.0,
     )
-
-
-def remove_file_from_dict(
-    file_path: str,
-    blob_hash: str,
-    files_info: Dict[str, Dict[str, Dict[str, str]]],
-    files_content: Optional[Dict[str, Dict[str, Any]]] = None,
-) -> None:
-    if files_content is not None and file_path in files_content:
-        files_content.pop(file_path)
-    for ref in files_info:
-        if file_path in files_info[ref] and (
-            files_content is not None
-            or files_info[ref][file_path]["blob_hash"] == blob_hash
-        ):
-            files_info[ref].pop(file_path)
 
 
 def extract(
@@ -231,7 +222,7 @@ def preprocess(
         exclude_vendors=exclude_vendors,
         langs=used_langs,
     )
-    files_info: Dict[str, Dict[str, Dict[str, str]]] = {ref: {} for ref in refs}
+    files_info = FilesInfo(refs)
     lang_count: CounterType[str] = Counter()
     seen_files: Set[Tuple[str, str]] = set()
     raw_count = 0
@@ -245,7 +236,7 @@ def preprocess(
         if (file_path, blob_hash) not in seen_files:
             lang_count[lang] += 1
             seen_files.add((file_path, blob_hash))
-        files_info[ref][file_path] = {"blob_hash": blob_hash, "language": lang}
+        files_info[ref][file_path] = FileInfo(blob_hash=blob_hash, language=lang)
     if raw_count:
         logger.info("Found %d parsable blobs:" % raw_count)
     else:
@@ -257,7 +248,7 @@ def preprocess(
     for lang in sorted(lang_count):
         logger.info("   %s : %d files.", lang, lang_count[lang])
 
-    files_content: Dict[str, Dict[str, Any]] = defaultdict(dict)
+    files_content = FilesContent(files_info)
     sql = get_file_content_sql(
         repository_id=repo,
         ref_names=refs,
@@ -287,7 +278,7 @@ def preprocess(
         lang = row["lang"].decode()
         contents = row["blob_content"].decode()
         if contents == "":
-            remove_file_from_dict(file_path, blob_hash, files_info)
+            files_info.remove(file_path, blob_hash)
             continue
         for attempt in range(2):
             try:
@@ -315,12 +306,12 @@ def preprocess(
                 blob_hash,
                 lang,
             )
-            remove_file_from_dict(file_path, blob_hash, files_info, files_content)
+            files_info.remove(file_path, blob_hash)
             blacklisted_files.add(file_path)
             continue
 
         parsed_count[lang] += 1
-        word_dict: Dict[str, Counter] = {feature: Counter() for feature in features}
+        feature_dict: FeatureContent = {feature: Counter() for feature in features}
         num_nodes = 0
         for word, feature in feature_extractor(uast):
             words = word.split()
@@ -336,14 +327,15 @@ def preprocess(
                 words = [stemmer.stem(word) for word in words]
             if words:
                 num_nodes += 1
-                word_dict[feature].update(words)
+                feature_dict[feature].update(words)
         if num_nodes == 0:
-            remove_file_from_dict(file_path, blob_hash, files_info)
+            files_info.remove(file_path, blob_hash)
             continue
         files_content[file_path][blob_hash] = {
-            feature: dict(feature_word_dict)
-            for feature, feature_word_dict in word_dict.items()
+            feature: feature_word_dict
+            for feature, feature_word_dict in feature_dict.items()
         }
+    files_content.purge(blacklisted_files)
     total_parsed = sum(parsed_count.values())
     logger.info("Extracted features from %d distinct blobs.", total_parsed)
     logger.debug(
@@ -355,12 +347,12 @@ def preprocess(
             "   Parsed successfully %f %% blobs.",
             parsed_count[lang] * 100 / lang_count[lang],
         )
-    output_dict = {
-        "files_info": {repo: dict(files_info)},
-        "files_content": {repo: dict(files_content)},
-        "refs": {repo: refs},
-    }
+    dataset = Dataset(
+        files_info={repo: files_info},
+        files_content={repo: files_content},
+        refs={repo: refs},
+    )
     logger.info("Saving features ...")
     with open(output_path, "wb") as fout:
-        pickle.dump(output_dict, fout)
+        pickle.dump(dataset, fout)
     logger.info("Saved features in '%s'." % output_path)

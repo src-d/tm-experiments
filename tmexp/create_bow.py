@@ -9,11 +9,13 @@ import tqdm
 from .cli import CLIBuilder, register_command
 from .io_constants import (
     BOW_DIR,
+    Dataset,
     DATASET_DIR,
     DOC_FILENAME,
     DOCWORD_FILENAME,
     REF_FILENAME,
     VOCAB_FILENAME,
+    WordCount,
 )
 from .utils import (
     check_file_exists,
@@ -94,7 +96,7 @@ def create_bow(
 
     logger.info("Loading dataset ...")
     with open(input_path, "rb") as fin:
-        input_dict = pickle.load(fin)
+        input_dataset: Dataset = pickle.load(fin)
 
     logger.info("Computing bag of words ...")
     langs = create_language_list(langs, exclude_langs)
@@ -106,9 +108,9 @@ def create_bow(
     docs: DefaultDict[str, DefaultDict[str, List[List[str]]]] = defaultdict(
         lambda: defaultdict(list)
     )
-    for repo, repo_files_content in tqdm.tqdm(input_dict["files_content"].items()):
-        repo_files_info = input_dict["files_info"][repo]
-        for file_path, blobs in tqdm.tqdm(repo_files_content.items()):
+    for repo, files_content in input_dataset.files_content.items():
+        logger.info("Processing repository '%s'", repo)
+        for file_path, blobs in tqdm.tqdm(files_content.items()):
             previous_blob_hash = None
             previous_docs: List[str] = []
             previous_blobs: Set[str] = set()
@@ -116,16 +118,16 @@ def create_bow(
                 previous_count: CounterType[str] = Counter()
                 doc_added = file_path + SEP + "added"
                 doc_deleted = file_path + SEP + "removed"
-            for ref in input_dict["refs"][repo]:
-                if file_path not in repo_files_info[ref]:
+            for ref in input_dataset.refs[repo]:
+                file_info = input_dataset.files_info[repo][ref].get(file_path)
+                if file_info is None:
                     if topic_model == HALL_MODEL:
                         continue
                     blob_hash = None
                 else:
-                    file_info = repo_files_info[ref][file_path]
-                    if file_info["language"] not in langs:
+                    if file_info.language not in langs:
                         break
-                    blob_hash = file_info["blob_hash"]
+                    blob_hash = file_info.blob_hash
                 if blob_hash == previous_blob_hash:
                     if blob_hash is not None:
                         for doc_name in previous_docs:
@@ -141,7 +143,7 @@ def create_bow(
                         previous_blobs.add(blob_hash)
                         num_blobs += 1
                     blob = blobs[blob_hash]
-                    word_counts: CounterType[str] = Counter()
+                    word_counts: WordCount = Counter()
                     for feature in features:
                         if feature not in blob:
                             continue
@@ -229,7 +231,7 @@ def create_bow(
 
     logger.info("Saving tagged refs ...")
     with open(refs_output_path, "w", encoding="utf-8") as fout:
-        for repo, repo_refs in input_dict["refs"].items():
+        for repo, repo_refs in input_dataset.refs.items():
             for ref in repo_refs:
                 fout.write("%s%s%s\n" % (repo, SEP, ref))
     logger.info("Saved tagged refs in '%s'" % refs_output_path)
@@ -245,11 +247,12 @@ def create_bow(
         fout.write("%d\n" * 3 % (num_docs, num_words, num_nnz))
         for repo in sorted(docs):
             for doc in sorted(docs[repo]):
-                for i, words in enumerate(sorted(bow[repo][doc])):
+                for i, words in enumerate(bow[repo][doc]):
                     doc_name = SEP.join((repo, doc, str(i)))
                     for word, count in words.items():
                         fout.write(
                             "%d %d %d\n"
                             % (document_index[doc_name], word_index[word], count)
                         )
+
     logger.info("Saved bags of words in '%s'" % docword_output_path)

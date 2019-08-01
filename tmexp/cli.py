@@ -107,7 +107,7 @@ class CLIBuilder:
         )
 
     def add_dataset_arg(self, required: bool) -> None:
-        help = "Name of the dataset created by `preprocess`%s."
+        help = "Name of the dataset%s."
         if required:
             self._add_required("--dataset-name", help % "")
         else:
