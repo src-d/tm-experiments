@@ -30,7 +30,14 @@ from .gitbase_queries import (
     get_file_info_sql,
     get_tagged_refs_sql,
 )
-from .io_constants import Dataset, DATASET_DIR, FeatureContent, FilesContent, FilesInfo
+from .io_constants import (
+    Dataset,
+    DATASET_DIR,
+    FeatureContent,
+    FileInfo,
+    FilesContent,
+    FilesInfo,
+)
 from .utils import (
     check_env_exists,
     check_remove,
@@ -229,7 +236,7 @@ def preprocess(
         if (file_path, blob_hash) not in seen_files:
             lang_count[lang] += 1
             seen_files.add((file_path, blob_hash))
-        files_info.add(ref, file_path, blob_hash, lang)
+        files_info[ref][file_path] = FileInfo(blob_hash=blob_hash, language=lang)
     if raw_count:
         logger.info("Found %d parsable blobs:" % raw_count)
     else:
@@ -324,7 +331,10 @@ def preprocess(
         if num_nodes == 0:
             files_info.remove(file_path, blob_hash)
             continue
-        files_content.add(file_path, blob_hash, feature_dict)
+        files_content[file_path][blob_hash] = {
+            feature: feature_word_dict
+            for feature, feature_word_dict in feature_dict.items()
+        }
     files_content.purge(blacklisted_files)
     total_parsed = sum(parsed_count.values())
     logger.info("Extracted features from %d distinct blobs.", total_parsed)

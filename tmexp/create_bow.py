@@ -119,7 +119,7 @@ def create_bow(
                 doc_added = file_path + SEP + "added"
                 doc_deleted = file_path + SEP + "removed"
             for ref in input_dataset.refs[repo]:
-                file_info = input_dataset.files_info[repo].file_info(ref, file_path)
+                file_info = input_dataset.files_info[repo][ref].get(file_path)
                 if file_info is None:
                     if topic_model == HALL_MODEL:
                         continue
