@@ -20,8 +20,6 @@ import numpy as np
 from .cli import CLIBuilder, register_command
 from .io_constants import (
     BOW_DIR,
-    DOC_ARTM_FILENAME,
-    DOC_FILENAME,
     DOCTOPIC_FILENAME,
     DOCWORD_FILENAME,
     TOPICS_DIR,
@@ -69,6 +67,12 @@ def _define_parser(parser: ArgumentParser) -> None:
         help="Selection metric to use.",
         choices=["perplexity", "distinctness"],
         default="distinctness",
+    )
+    parser.add_argument(
+        "--max-iter",
+        help="Maximum number of iterations for each training phase.",
+        default=1000,
+        type=int,
     )
     parser.add_argument(
         "--sparse-word-coeff",
@@ -167,6 +171,7 @@ def loop_until_convergence(
     model_artm: ARTM,
     converge_metric: str,
     converge_thresh: float,
+    max_iter: int,
     quiet: bool,
 ) -> ARTM:
     converged = False
@@ -183,6 +188,8 @@ def loop_until_convergence(
         if converged or not quiet or num_iter == 1:
             print_scores(logger, num_iter, scores)
         prev_score = score
+        if num_iter > max_iter:
+            break
     return model_artm
 
 
@@ -195,6 +202,7 @@ def train_artm(
     max_topic: int,
     converge_metric: str,
     converge_thresh: float,
+    max_iter: int,
     sparse_word_coeff: float,
     sparse_doc_coeff: float,
     decor_coeff: float,
@@ -214,12 +222,8 @@ def train_artm(
     check_file_exists(os.path.join(input_dir, VOCAB_FILENAME))
     docword_input_path = os.path.join(input_dir, DOCWORD_FILENAME)
     check_file_exists(docword_input_path)
-    doc_input_path = os.path.join(input_dir, DOC_FILENAME)
-    check_file_exists(doc_input_path)
 
     output_dir = os.path.join(TOPICS_DIR, bow_name, exp_name)
-    doc_output_path = os.path.join(output_dir, DOC_ARTM_FILENAME)
-    check_remove(doc_output_path, logger, force)
     doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILENAME)
     check_remove(doctopic_output_path, logger, force)
     wordtopic_output_path = os.path.join(output_dir, WORDTOPIC_FILENAME)
@@ -242,9 +246,6 @@ def train_artm(
         num_rows = int(fin.readline())
         logger.info("Number of document/word pairs: %d", num_rows)
 
-    with open(doc_input_path, "r", encoding="utf8") as fin:
-        doc_names = fin.read().splitlines()
-
     logger.info(
         "Loaded bags of words, created %d batches of up to %d documents.",
         batch_vectorizer.num_batches,
@@ -259,6 +260,8 @@ def train_artm(
 
     model_artm = ARTM(
         cache_theta=True,
+        reuse_theta=True,
+        theta_name="theta",
         dictionary=batch_vectorizer.dictionary,
         num_document_passes=1,
         num_topics=max_topic,
@@ -278,7 +281,13 @@ def train_artm(
 
     logger.info("Decorrelating topics ...")
     model_artm = loop_until_convergence(
-        logger, batch_vectorizer, model_artm, converge_metric, converge_thresh, quiet
+        logger,
+        batch_vectorizer,
+        model_artm,
+        converge_metric,
+        converge_thresh,
+        max_iter,
+        quiet,
     )
 
     logger.info("Applying selection regularization on topics ...")
@@ -287,7 +296,13 @@ def train_artm(
     model_artm.regularizers["Decorrelator"].tau = 0
     model_artm.regularizers["Selector"].tau = select_coeff
     model_artm = loop_until_convergence(
-        logger, batch_vectorizer, model_artm, converge_metric, converge_thresh, quiet
+        logger,
+        batch_vectorizer,
+        model_artm,
+        converge_metric,
+        converge_thresh,
+        max_iter,
+        quiet,
     )
 
     logger.info(
@@ -295,9 +310,8 @@ def train_artm(
         min_docs,
         min_prob,
     )
-    doctopic, _, _ = model_artm.get_theta_sparse(eps=doctopic_eps)
-    doctopic = doctopic.todense()
-    topics = np.argwhere(np.sum(doctopic > min_prob, axis=1) > min_docs).flatten()
+    doctopic, _, _ = model_artm.get_phi_dense(model_name="theta")
+    topics = np.argwhere(np.sum(doctopic > min_prob, axis=0) > min_docs).flatten()
     topic_names = [t for i, t in enumerate(model_artm.topic_names) if i in topics]
     model_artm.reshape(topic_names)
     if len(topics):
@@ -313,19 +327,19 @@ def train_artm(
     model_artm.regularizers["Sparse Topic"].tau = -sparse_word_coeff
     model_artm.regularizers["Sparse Doc"].tau = -sparse_doc_coeff
     model_artm = loop_until_convergence(
-        logger, batch_vectorizer, model_artm, converge_metric, converge_thresh, quiet
+        logger,
+        batch_vectorizer,
+        model_artm,
+        converge_metric,
+        converge_thresh,
+        max_iter,
+        quiet,
     )
 
     logger.info("Finished training.")
-    # TODO(https://github.com/src-d/tm-experiments/issues/21)
-    doctopic, _, doc_indexes = model_artm.get_theta_sparse()
-    doctopic = doctopic.todense()
-    with open(doc_output_path, "w", encoding="utf8") as fout:
-        fout.write(
-            "%s\n" % "\n".join(doc_names[doc_index] for doc_index in doc_indexes)
-        )
+    doctopic, _, _ = model_artm.get_phi_dense(model_name="theta")
     logger.info("Saving topics per document ...")
-    np.save(doctopic_output_path, doctopic.T)
+    np.save(doctopic_output_path, doctopic)
     logger.info("Saved topics per document in '%s'.", doctopic_output_path)
     wordtopic, _, _ = model_artm.get_phi_dense()
     logger.info("Saving word/topic distribution ...")
