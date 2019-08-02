@@ -69,6 +69,12 @@ def _define_parser(parser: ArgumentParser) -> None:
         default="distinctness",
     )
     parser.add_argument(
+        "--max-iter",
+        help="Maximum number of iterations for each training phase.",
+        default=1000,
+        type=int,
+    )
+    parser.add_argument(
         "--sparse-word-coeff",
         help="Coefficient used by the sparsity inducing regularizer for the word topic "
         "distribution (phi) defaults to %(default)s.",
@@ -165,6 +171,7 @@ def loop_until_convergence(
     model_artm: ARTM,
     converge_metric: str,
     converge_thresh: float,
+    max_iter: int,
     quiet: bool,
 ) -> ARTM:
     converged = False
@@ -181,7 +188,7 @@ def loop_until_convergence(
         if converged or not quiet or num_iter == 1:
             print_scores(logger, num_iter, scores)
         prev_score = score
-        if num_iter > 200:
+        if num_iter > max_iter:
             break
     return model_artm
 
@@ -195,6 +202,7 @@ def train_artm(
     max_topic: int,
     converge_metric: str,
     converge_thresh: float,
+    max_iter: int,
     sparse_word_coeff: float,
     sparse_doc_coeff: float,
     decor_coeff: float,
@@ -273,7 +281,13 @@ def train_artm(
 
     logger.info("Decorrelating topics ...")
     model_artm = loop_until_convergence(
-        logger, batch_vectorizer, model_artm, converge_metric, converge_thresh, quiet
+        logger,
+        batch_vectorizer,
+        model_artm,
+        converge_metric,
+        converge_thresh,
+        max_iter,
+        quiet,
     )
 
     logger.info("Applying selection regularization on topics ...")
@@ -282,7 +296,13 @@ def train_artm(
     model_artm.regularizers["Decorrelator"].tau = 0
     model_artm.regularizers["Selector"].tau = select_coeff
     model_artm = loop_until_convergence(
-        logger, batch_vectorizer, model_artm, converge_metric, converge_thresh, quiet
+        logger,
+        batch_vectorizer,
+        model_artm,
+        converge_metric,
+        converge_thresh,
+        max_iter,
+        quiet,
     )
 
     logger.info(
@@ -307,7 +327,13 @@ def train_artm(
     model_artm.regularizers["Sparse Topic"].tau = -sparse_word_coeff
     model_artm.regularizers["Sparse Doc"].tau = -sparse_doc_coeff
     model_artm = loop_until_convergence(
-        logger, batch_vectorizer, model_artm, converge_metric, converge_thresh, quiet
+        logger,
+        batch_vectorizer,
+        model_artm,
+        converge_metric,
+        converge_thresh,
+        max_iter,
+        quiet,
     )
 
     logger.info("Finished training.")
