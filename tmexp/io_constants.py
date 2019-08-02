@@ -52,6 +52,17 @@ DOCWORD_FILENAME = "docword.bow_tm.txt"
 REF_FILENAME = "refs.bow_tm.txt"
 VOCAB_FILENAME = "vocab.bow_tm.txt"
 
+RefList = List[str]
+
+
+class DocumentEvolution(NamedTuple):
+    bows: List[WordCount]
+    refs: List[RefList]
+
+
+EvolutionModel = Dict[str, DocumentEvolution]
+
+
 TOPICS_DIR = "/data/topics"
 DOCTOPIC_FILENAME = "doctopic.npy"
 WORDTOPIC_FILENAME = "wordtopic.npy"
