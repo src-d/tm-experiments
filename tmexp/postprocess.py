@@ -10,7 +10,6 @@ from .cli import CLIBuilder, register_command
 from .create_bow import DIFF_MODEL, HALL_MODEL, SEP
 from .io_constants import (
     BOW_DIR,
-    DOC_ARTM_FILENAME,
     DOC_FILENAME,
     DOCTOPIC_FILENAME,
     DOCWORD_FILENAME,
@@ -27,34 +26,16 @@ def _define_parser(parser: ArgumentParser) -> None:
     cli_builder.add_bow_arg(required=True)
     cli_builder.add_experiment_arg(required=True)
     cli_builder.add_force_arg()
-    # TODO(https://github.com/src-d/tm-experiments/issues/21)
-    parser.add_argument(
-        "--original-document-index",
-        action="store_true",
-        help="Use the original document index instead of the workaround computed "
-        "during ARTM training.",
-    )
 
 
 @register_command(parser_definer=_define_parser)
-def postprocess(
-    bow_name: str,
-    exp_name: str,
-    force: bool,
-    # TODO(https://github.com/src-d/tm-experiments/issues/21)
-    original_document_index: bool,
-    log_level: str,
-) -> None:
+def postprocess(bow_name: str, exp_name: str, force: bool, log_level: str) -> None:
     """Compute document word count and membership given a topic model."""
     logger = create_logger(log_level, __name__)
 
     input_dir_bow = os.path.join(BOW_DIR, bow_name)
     dir_exp = os.path.join(TOPICS_DIR, bow_name, exp_name)
-    # TODO(https://github.com/src-d/tm-experiments/issues/21)
-    if original_document_index:
-        doc_input_path = os.path.join(input_dir_bow, DOC_FILENAME)
-    else:
-        doc_input_path = os.path.join(dir_exp, DOC_ARTM_FILENAME)
+    doc_input_path = os.path.join(input_dir_bow, DOC_FILENAME)
     check_file_exists(doc_input_path)
     docword_input_path = os.path.join(input_dir_bow, DOCWORD_FILENAME)
     check_file_exists(docword_input_path)
