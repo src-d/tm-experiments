@@ -1,6 +1,6 @@
 FROM ubuntu:18.04
 
-RUN mkdir /data /package
+RUN mkdir /data /package /nltk_data
 
 ARG DEBIAN_FRONTEND=noninteractive 
 
@@ -11,6 +11,7 @@ ENV GITBASE_PORT 3306
 ENV GITBASE_USERNAME root
 ENV GITBASE_PASSWORD ""
 ENV ARTM_SHARED_LIBRARY /usr/local/lib/libartm.so
+ENV NLTK_DATA /nltk_data
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -43,6 +44,7 @@ RUN curl -sSL https://get.docker.com/ | sh \
   make \
   python3-dev \
   python3-pip \
+  unzip \
   && ln -s /usr/bin/python3 /usr/local/bin/python \
   && pip3 install numpy scipy pandas protobuf tqdm wheel \
   && git clone --branch v0.10.0 https://github.com/bigartm/bigartm.git /opt/bigartm \
@@ -51,6 +53,9 @@ RUN curl -sSL https://get.docker.com/ | sh \
   && cmake -DINSTALL_PYTHON_PACKAGE=ON -DPYTHON=python3 .. \
   && make -j$(getconf _NPROCESSORS_ONLN) \
   && make install \
+  && mkdir $NLTK_DATA/corpora \
+  && curl -sSL https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/stopwords.zip -o $NLTK_DATA/corpora/stopwords.zip \
+  && unzip $NLTK_DATA/corpora/stopwords.zip -d $NLTK_DATA/corpora/ \
   && rm -rf /usr/share/doc /usr/share/man \
   && apt-get autoremove --purge -y \
   && apt-get clean \

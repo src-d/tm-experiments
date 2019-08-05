@@ -20,6 +20,7 @@ import warnings
 
 import bblfsh
 from nltk import PorterStemmer
+from nltk.corpus import stopwords
 import pymysql
 import pymysql.cursors
 import tqdm
@@ -37,6 +38,7 @@ from .io_constants import (
     FileInfo,
     FilesContent,
     FilesInfo,
+    WordCount,
 )
 from .utils import (
     check_env_exists,
@@ -101,20 +103,23 @@ def _define_parser(parser: ArgumentParser) -> None:
         default=".",
     )
     parser.add_argument(
-        "--no-tokenize",
-        help="To skip tokenization.",
-        dest="tokenize",
-        action="store_false",
-    )
-    parser.add_argument(
-        "--no-stem", help="To skip stemming.", dest="stem", action="store_false"
-    )
-    parser.add_argument(
         "--bblfsh-timeout",
         help="Timeout for parse requests made to Babelfish.",
         type=float,
         default=10.0,
     )
+
+
+def good_token(token: str) -> bool:
+    if len(token) < 3 or len(set(token)) == 1:
+        return False
+    prev_char, count = None, 0
+    for char in token:
+        if prev_char == char:
+            count += 1
+        if count == 3:
+            return False
+    return True
 
 
 def extract(
@@ -151,8 +156,6 @@ def preprocess(
     keep_vendors: bool,
     features: List[str],
     force: bool,
-    tokenize: bool,
-    stem: bool,
     bblfsh_timeout: float,
     log_level: str,
 ) -> None:
@@ -255,8 +258,9 @@ def preprocess(
         exclude_vendors=exclude_vendors,
         langs=used_langs,
     )
-    if stem:
-        stemmer = PorterStemmer()
+    stop_words = frozenset(stopwords.words("english"))
+    stemmer = PorterStemmer()
+    stem_mapping: Dict[str, WordCount] = defaultdict(Counter)
     blacklisted_files: Set[str] = set()
     client = bblfsh.BblfshClient("%s:%d" % (bblfsh_host, bblfsh_port))
     parsed_count: CounterType = Counter()
@@ -314,20 +318,24 @@ def preprocess(
         feature_dict: FeatureContent = {feature: Counter() for feature in features}
         num_nodes = 0
         for word, feature in feature_extractor(uast):
-            words = word.split()
-            if tokenize:
-                words = [w for word in words for w in word.split("_")]
-                words = [
-                    w
-                    for word in words
-                    for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)", word)
-                ]
-            words = [word.lower() for word in words]
-            if stem:
-                words = [stemmer.stem(word) for word in words]
-            if words:
+            if feature == COMMENTS:
+                words = [w for w in word.split() if w.lower() not in stop_words]
+            else:
+                words = [word]
+            words = [w for word in words for w in word.split("_")]
+            words = [
+                w
+                for word in words
+                for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)", word)
+            ]
+            words = [w.lower() for w in words]
+            stems_words: List[Tuple[str, str]] = [(stemmer.stem(w), w) for w in words]
+            stems_words = [(s, w) for s, w in stems_words if good_token(s)]
+            if stems_words:
                 num_nodes += 1
-                feature_dict[feature].update(words)
+                feature_dict[feature].update(s for s, _ in stems_words)
+                for stem, word in stems_words:
+                    stem_mapping[stem][word] += 1
         if num_nodes == 0:
             files_info.remove(file_path, blob_hash)
             continue
@@ -347,6 +355,13 @@ def preprocess(
             "   Parsed successfully %f %% blobs.",
             parsed_count[lang] * 100 / lang_count[lang],
         )
+    logger.info("Creating reverse stem mapping ...")
+    reverse_mapping: Dict[str, str] = {}
+    for stem in stem_mapping:
+        reverse_mapping[stem] = stem_mapping[stem].most_common(1)[0][0]
+    logger.info("Reversing stemming ...")
+    files_content.map_words(reverse_mapping)
+
     dataset = Dataset(
         files_info={repo: files_info},
         files_content={repo: files_content},

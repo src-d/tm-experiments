@@ -92,10 +92,11 @@ class CLIBuilder:
 
         self.parser.add_argument(
             "--features",
-            help="To select which tokens to use as words, defaults to all.",
+            help="To select which tokens to use as words, defaults to comments and "
+            "identifiers.",
             nargs="*",
             choices=[COMMENTS, IDENTIFIERS, LITERALS],
-            default=[COMMENTS, IDENTIFIERS, LITERALS],
+            default=[COMMENTS, IDENTIFIERS],
         )
 
     def add_force_arg(self) -> None:
