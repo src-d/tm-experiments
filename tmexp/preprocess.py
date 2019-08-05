@@ -20,6 +20,7 @@ import warnings
 
 import bblfsh
 from nltk import PorterStemmer
+from nltk.corpus import stopwords
 import pymysql
 import pymysql.cursors
 import tqdm
@@ -248,6 +249,7 @@ def preprocess(
         exclude_vendors=exclude_vendors,
         langs=used_langs,
     )
+    stop_words = frozenset(stopwords.words("english"))
     if stem:
         stemmer = PorterStemmer()
     blacklisted_files: Set[str] = set()
@@ -307,7 +309,10 @@ def preprocess(
         feature_dict: FeatureContent = {feature: Counter() for feature in features}
         num_nodes = 0
         for word, feature in feature_extractor(uast):
-            words = word.split()
+            if feature == COMMENTS:
+                words = [w for w in word.split() if w.lower() not in stop_words]
+            else:
+                words = [word]
             words = [w for word in words for w in word.split("_")]
             words = [
                 w
