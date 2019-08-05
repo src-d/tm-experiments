@@ -1,3 +1,4 @@
+from collections import Counter
 from typing import Counter as CounterType, Dict, List, NamedTuple, Set
 
 DATASET_DIR = "/data/datasets"
@@ -38,6 +39,15 @@ class FilesContent(Dict[str, BlobContent]):
     def purge(self, blacklist: Set[str]) -> None:
         for file_path in blacklist:
             self.pop(file_path)
+
+    def map_words(self, mapping: Dict[str, str]) -> None:
+        for file_path, blob_dict in self.items():
+            for blob_hash, feature_dict in blob_dict.items():
+                for feature, word_dict in feature_dict.items():
+                    new_wc: WordCount = Counter()
+                    for word, count in word_dict.items():
+                        new_wc[mapping[word]] = count
+                    self[file_path][blob_hash][feature] = new_wc
 
 
 class Dataset(NamedTuple):
