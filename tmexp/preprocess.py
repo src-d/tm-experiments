@@ -101,12 +101,6 @@ def _define_parser(parser: ArgumentParser) -> None:
         default=".",
     )
     parser.add_argument(
-        "--no-tokenize",
-        help="To skip tokenization.",
-        dest="tokenize",
-        action="store_false",
-    )
-    parser.add_argument(
         "--no-stem", help="To skip stemming.", dest="stem", action="store_false"
     )
     parser.add_argument(
@@ -151,7 +145,6 @@ def preprocess(
     keep_vendors: bool,
     features: List[str],
     force: bool,
-    tokenize: bool,
     stem: bool,
     bblfsh_timeout: float,
     log_level: str,
@@ -315,13 +308,12 @@ def preprocess(
         num_nodes = 0
         for word, feature in feature_extractor(uast):
             words = word.split()
-            if tokenize:
-                words = [w for word in words for w in word.split("_")]
-                words = [
-                    w
-                    for word in words
-                    for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)", word)
-                ]
+            words = [w for word in words for w in word.split("_")]
+            words = [
+                w
+                for word in words
+                for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)", word)
+            ]
             words = [word.lower() for word in words]
             if stem:
                 words = [stemmer.stem(word) for word in words]
