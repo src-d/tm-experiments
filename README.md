@@ -11,6 +11,12 @@ git clone https://github.com/src-d/tm-experiments
 docker build tm-experiments -t tmexp
 ```
 
+If you have GPU(s) and want to use our lit [Neural Identifier Splitter](https://arxiv.org/abs/1805.11651) then consider building the image with:
+
+```
+docker build tm-experiments -t tmexp --build-arg USE_NN=true
+```
+
 In all of the following, all of the created data will be stored in a single directory (hereinafter referred to as `/path/to/data`), which would have the following structure if you were to run with the exact same names:
 
 ```

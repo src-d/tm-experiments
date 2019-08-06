@@ -2,7 +2,8 @@ FROM ubuntu:18.04
 
 RUN mkdir /data /package /nltk_data
 
-ARG DEBIAN_FRONTEND=noninteractive 
+ARG DEBIAN_FRONTEND=noninteractive
+ARG USE_NN=false
 
 ENV BBLFSH_HOSTNAME tmexp_bblfshd
 ENV BBLFSH_PORT 9432
@@ -67,8 +68,9 @@ RUN pip3 install --no-cache-dir -r /package/requirements.txt
 
 COPY setup.py /package
 COPY README.md /package
+COPY install.sh /package
 COPY tmexp /package/tmexp
 
-RUN pip3 install --no-cache-dir /package/.
+RUN chmod u+x /package/install.sh && /package/install.sh $USE_NN
 
 ENTRYPOINT ["tmexp"]

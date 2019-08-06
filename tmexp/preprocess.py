@@ -108,6 +108,11 @@ def _define_parser(parser: ArgumentParser) -> None:
         type=float,
         default=10.0,
     )
+    parser.add_argument(
+        "--use-nn",
+        help="To enable the use of the neural splitter.",
+        action="store_true",
+    )
 
 
 def good_token(token: str) -> bool:
@@ -157,6 +162,7 @@ def preprocess(
     features: List[str],
     force: bool,
     bblfsh_timeout: float,
+    use_nn: bool,
     log_level: str,
 ) -> None:
     """Extract features from a repository and store them as a pickled dict."""
@@ -186,6 +192,11 @@ def preprocess(
     port = int(check_env_exists("GITBASE_PORT"))
     user = check_env_exists("GITBASE_USERNAME")
     password = check_env_exists("GITBASE_PASSWORD")
+
+    if use_nn:
+        from sourced.ml.core.algorithms.token_parser import TokenParser
+
+        token_parser = TokenParser(single_shot=True, use_nn=True)
 
     logger.info("Processing repository '%s'" % repo)
     logger.info("Retrieving tagged references ...")
@@ -322,12 +333,15 @@ def preprocess(
                 words = [w for w in word.split() if w.lower() not in stop_words]
             else:
                 words = [word]
-            words = [w for word in words for w in word.split("_")]
-            words = [
-                w
-                for word in words
-                for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)", word)
-            ]
+            if use_nn:
+                words = [token_parser.split(w) for w in words]
+            else:
+                words = [w for word in words for w in word.split("_")]
+                words = [
+                    w
+                    for word in words
+                    for w in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)", word)
+                ]
             words = [w.lower() for w in words]
             stems_words: List[Tuple[str, str]] = [(stemmer.stem(w), w) for w in words]
             stems_words = [(s, w) for s, w in stems_words if good_token(s)]

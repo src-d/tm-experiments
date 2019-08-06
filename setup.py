@@ -43,6 +43,7 @@ setup(
         "gensim==3.7.3",
         "matplotlib==3.1.1",
     ],
+    extras_require={"nn": ["sourced-ml-core[tf_gpu]>=0.0.4"]},
     include_package_data=True,
     license="Apache-2.0",
     classifiers=[
