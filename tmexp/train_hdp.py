@@ -110,13 +110,13 @@ def train_hdp(
         logger.info("Number of document/word pairs: %d", num_rows)
         for line in tqdm.tqdm(fin, total=num_rows):
             doc_id, word_id, count = map(int, line.split())
-            corpus[doc_id].append((word_id, count))
+            corpus[doc_id].append((word_id - 1, count))
     logger.info("Corpus created.")
 
     logger.info("Loading vocabulary ...")
     with open(words_input_path, "r", encoding="utf-8") as fin:
         word_index: Dict[int, str] = {
-            i: word.replace("\n", "") for i, word in enumerate(fin, start=1)
+            i: word.replace("\n", "") for i, word in enumerate(fin)
         }
     id2word = gensim.corpora.Dictionary.from_corpus(corpus, word_index)
     logger.info("Word index created.")
