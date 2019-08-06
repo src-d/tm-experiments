@@ -334,7 +334,7 @@ def preprocess(
             else:
                 words = [word]
             if use_nn:
-                words = [token_parser.split(w) for w in words]
+                words = [w for word in words for w in token_parser.split(word)]
             else:
                 words = [w for word in words for w in word.split("_")]
                 words = [
