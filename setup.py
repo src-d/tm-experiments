@@ -38,7 +38,7 @@ setup(
     install_requires=[
         "nltk==3.4.3",
         "pymysql==0.9.3",
-        "bblfsh==3.0.4",
+        "bblfsh==3.1.1",
         "tqdm==4.32.2",
         "gensim==3.7.3",
         "matplotlib==3.1.1",
