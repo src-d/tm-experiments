@@ -8,14 +8,13 @@ import numpy as np
 
 from .cli import CLIBuilder, register_command
 from .create_bow import ADD, DEL, DIFF_MODEL, HALL_MODEL, SEP
+from .data import RefList, RepoMapping
 from .io_constants import (
     BOW_DIR,
     DOC_FILENAME,
     DOCWORD_FILENAME,
     LABELS_FILENAME,
     REF_FILENAME,
-    RefList,
-    RepoMapping,
     TOPICS_DIR,
     VOCAB_FILENAME,
     WORDTOPIC_FILENAME,
@@ -103,9 +102,7 @@ def label(
         if SEP + ADD in line or SEP + DEL in line:
             topic_model, doc_type = DIFF_MODEL, "delta-documents"
             fin.seek(0)
-            repo_mapping: RepoMapping = defaultdict(
-                lambda: defaultdict(lambda: defaultdict(dict))
-            )
+            repo_mapping = RepoMapping()
             for doc_ind, line in enumerate(fin):
                 doc_info = line.split()
                 repo, file_path, delta_type, _ = doc_info[0].split(SEP)
@@ -129,7 +126,7 @@ def label(
     if topic_model == DIFF_MODEL:
         logger.info("Loading tagged refs ...")
         with open(refs_input_path, "r", encoding="utf-8") as fin:
-            refs: DefaultDict[str, RefList] = defaultdict(list)
+            refs: DefaultDict[str, RefList] = defaultdict(RefList)
             for line in fin:
                 repo, ref = line.split(SEP)
                 refs[repo].append(ref.replace("\n", ""))
