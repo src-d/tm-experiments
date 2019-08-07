@@ -26,20 +26,21 @@ import pymysql.cursors
 import tqdm
 
 from .cli import CLIBuilder, register_command
+from .data import (
+    Dataset,
+    FeatureContent,
+    FileInfo,
+    FilesContent,
+    FilesInfo,
+    RefList,
+    WordCount,
+)
 from .gitbase_queries import (
     get_file_content_sql,
     get_file_info_sql,
     get_tagged_refs_sql,
 )
-from .io_constants import (
-    Dataset,
-    DATASET_DIR,
-    FeatureContent,
-    FileInfo,
-    FilesContent,
-    FilesInfo,
-    WordCount,
-)
+from .io_constants import DATASET_DIR
 from .utils import (
     check_env_exists,
     check_remove,
@@ -201,8 +202,8 @@ def preprocess(
     logger.info("Processing repository '%s'" % repo)
     logger.info("Retrieving tagged references ...")
     sql = get_tagged_refs_sql(repository_id=repo)
-    refs_dict: DefaultDict[int, DefaultDict[int, List[str]]] = defaultdict(
-        lambda: defaultdict(list)
+    refs_dict: DefaultDict[int, DefaultDict[int, RefList]] = defaultdict(
+        lambda: defaultdict(RefList)
     )
     if only_head:
         refs = ["HEAD"]
@@ -271,7 +272,7 @@ def preprocess(
     )
     stop_words = frozenset(stopwords.words("english"))
     stemmer = PorterStemmer()
-    stem_mapping: Dict[str, WordCount] = defaultdict(Counter)
+    stem_mapping: DefaultDict[str, WordCount] = defaultdict(WordCount)
     blacklisted_files: Set[str] = set()
     client = bblfsh.BblfshClient("%s:%d" % (bblfsh_host, bblfsh_port))
     parsed_count: CounterType = Counter()
@@ -326,7 +327,7 @@ def preprocess(
             continue
 
         parsed_count[lang] += 1
-        feature_dict: FeatureContent = {feature: Counter() for feature in features}
+        feature_content = FeatureContent(features)
         num_nodes = 0
         for word, feature in feature_extractor(uast):
             if feature == COMMENTS:
@@ -347,16 +348,13 @@ def preprocess(
             stems_words = [(s, w) for s, w in stems_words if good_token(s)]
             if stems_words:
                 num_nodes += 1
-                feature_dict[feature].update(s for s, _ in stems_words)
+                feature_content[feature].update(s for s, _ in stems_words)
                 for stem, word in stems_words:
                     stem_mapping[stem][word] += 1
         if num_nodes == 0:
             files_info.remove(file_path, blob_hash)
             continue
-        files_content[file_path][blob_hash] = {
-            feature: feature_word_dict
-            for feature, feature_word_dict in feature_dict.items()
-        }
+        files_content[file_path][blob_hash] = feature_content
     files_content.purge(blacklisted_files)
     total_parsed = sum(parsed_count.values())
     logger.info("Extracted features from %d distinct blobs.", total_parsed)

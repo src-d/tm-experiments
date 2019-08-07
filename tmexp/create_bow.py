@@ -1,5 +1,4 @@
 from argparse import ArgumentParser
-from collections import Counter
 import os
 import pickle
 from typing import Dict, List, Optional, Set
@@ -7,17 +6,14 @@ from typing import Dict, List, Optional, Set
 import tqdm
 
 from .cli import CLIBuilder, register_command
+from .data import Dataset, DocumentEvolution, EvolutionModel, RefList, WordCount
 from .io_constants import (
     BOW_DIR,
-    Dataset,
     DATASET_DIR,
     DOC_FILENAME,
-    DocumentEvolution,
     DOCWORD_FILENAME,
-    EvolutionModel,
     REF_FILENAME,
     VOCAB_FILENAME,
-    WordCount,
 )
 from .utils import (
     check_file_exists,
@@ -104,15 +100,15 @@ def create_bow(
 
     logger.info("Creating topic evolution model  ...")
     langs = create_language_list(langs, exclude_langs)
-    evolution_model: EvolutionModel = {}
-    doc_freq: WordCount = Counter()
+    evolution_model = EvolutionModel()
+    doc_freq = WordCount()
     num_blobs = 0
     for repo, files_content in input_dataset.files_content.items():
         logger.info("Processing repository '%s'", repo)
         for file_path, blobs in tqdm.tqdm(files_content.items()):
             bows: Dict[str, WordCount] = {}
             for blob_hash, feature_dict in blobs.items():
-                bow: WordCount = Counter()
+                bow = WordCount()
                 for feature in features:
                     if feature not in feature_dict:
                         continue
@@ -129,7 +125,7 @@ def create_bow(
                     if not seen_blobs:
                         continue
                     cur_blob_hash = None
-                    cur_bow: WordCount = Counter()
+                    cur_bow = WordCount()
                 else:
                     if file_info.language not in langs:
                         break
@@ -140,7 +136,7 @@ def create_bow(
                     doc_evolution.refs[-1].append(ref)
                 else:
                     doc_evolution.bows.append(cur_bow)
-                    doc_evolution.refs.append([ref])
+                    doc_evolution.refs.append(RefList([ref]))
                     prev_blob_hash = cur_blob_hash
             if not doc_evolution.bows:
                 continue
@@ -150,7 +146,7 @@ def create_bow(
             else:
                 added_evolution = DocumentEvolution(bows=[], refs=[])
                 removed_evolution = DocumentEvolution(bows=[], refs=[])
-                prev_bow: WordCount = Counter()
+                prev_bow = WordCount()
                 for bow, refs in zip(doc_evolution.bows, doc_evolution.refs):
                     added_evolution.bows.append(bow - prev_bow)
                     added_evolution.refs.append(refs)
@@ -214,9 +210,9 @@ def create_bow(
         for doc_name in sorted(evolution_model):
             doc_evolution = evolution_model[doc_name]
             for i, refs in enumerate(doc_evolution.refs):
-                doc_name = SEP.join([doc_name, str(i)])
-                document_index[doc_name] = num_docs
-                fout.write(" ".join([doc_name] + refs) + "\n")
+                doc_name_ind = SEP.join([doc_name, str(i)])
+                document_index[doc_name_ind] = num_docs
+                fout.write(" ".join([doc_name_ind] + refs) + "\n")
                 num_docs += 1
     logger.info("Number of distinct documents : %d" % num_docs)
     logger.info("Saved document index in '%s'" % doc_output_path)
@@ -244,10 +240,10 @@ def create_bow(
         fout.write("%d\n" * 3 % (num_docs, num_words, num_nnz))
         for doc_name, doc_evolution in evolution_model.items():
             for i, bow in enumerate(doc_evolution.bows):
-                doc_name = SEP.join([doc_name, str(i)])
+                doc_name_ind = SEP.join([doc_name, str(i)])
                 for word, count in bow.items():
                     fout.write(
                         "%d %d %d\n"
-                        % (document_index[doc_name], word_index[word], count)
+                        % (document_index[doc_name_ind], word_index[word], count)
                     )
     logger.info("Saved bags of words in '%s'" % docword_output_path)

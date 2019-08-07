@@ -2,12 +2,13 @@ from argparse import ArgumentParser
 from collections import defaultdict
 import itertools
 import os
-from typing import Dict, List, Union
+from typing import DefaultDict, Dict, List, Union
 
 import numpy as np
 
 from .cli import CLIBuilder, register_command
-from .create_bow import DIFF_MODEL, HALL_MODEL, SEP
+from .create_bow import ADD, DEL, DIFF_MODEL, HALL_MODEL, SEP
+from .data import RefList, RepoMapping
 from .io_constants import (
     BOW_DIR,
     DOC_FILENAME,
@@ -98,17 +99,22 @@ def label(
     logger.info("Loading document index ...")
     with open(doc_input_path, "r", encoding="utf-8") as fin:
         line = fin.readline()
-        if ":added" in line or ":removed" in line:
+        if SEP + ADD in line or SEP + DEL in line:
             topic_model, doc_type = DIFF_MODEL, "delta-documents"
             fin.seek(0)
-            doc_index = fin.read().split("\n")
+            repo_mapping = RepoMapping()
+            for doc_ind, line in enumerate(fin):
+                doc_info = line.split()
+                repo, file_path, delta_type, _ = doc_info[0].split(SEP)
+                first_ref = doc_info[1]
+                repo_mapping[repo][file_path][first_ref][delta_type] = doc_ind
+
         else:
             topic_model, doc_type = HALL_MODEL, "documents"
     logger.info("Loaded document index, detected %s topic model." % topic_model)
 
     logger.info("Loading bags of words ...")
     with open(docword_input_path, "r", encoding="utf-8") as fin:
-
         num_docs = int(fin.readline())
         num_words = int(fin.readline())
         num_bags = int(fin.readline())
@@ -120,33 +126,43 @@ def label(
     if topic_model == DIFF_MODEL:
         logger.info("Loading tagged refs ...")
         with open(refs_input_path, "r", encoding="utf-8") as fin:
-            refs = fin.read().split("\n")
-        logger.info("Loaded tagged refs, found %d." % len(refs))
-
+            refs: DefaultDict[str, RefList] = defaultdict(RefList)
+            for line in fin:
+                repo, ref = line.split(SEP)
+                refs[repo].append(ref.replace("\n", ""))
+        logger.info("Loaded tagged refs:")
+        for repo, repo_refs in refs.items():
+            logger.info("\tRepository '%s': %d refs", repo, len(repo_refs))
         logger.info("Recreating hall model corpus (we can't use %s) ..." % doc_type)
-        doc_ref: Dict[str, Dict[str, Dict[str, int]]] = defaultdict(
-            lambda: defaultdict(dict)
-        )
-        for ind_doc in range(num_docs):
-            name_refs = doc_index[ind_doc].split()
-            doc_name, doc_type, _ = name_refs[0].split(SEP)
-            ref = name_refs[1]
-            doc_ref[doc_name][ref][doc_type] = ind_doc
-        num_docs = len([_ for ref_dict in doc_ref.values() for ref in ref_dict])
+
         new_corpus = np.zeros((num_docs, num_words))
         cur_doc = 0
-        for ref_dict in doc_ref.values():
-            cur_doc_counts: np.array = np.zeros(num_words)
-            for ref in refs:
-                if ref not in ref_dict:
-                    continue
-                if "added" in ref_dict[ref]:
-                    cur_doc_counts += corpus[ref_dict[ref]["added"]]
-                if "removed" in ref_dict[ref]:
-                    cur_doc_counts -= corpus[ref_dict[ref]["removed"]]
-                if cur_doc_counts.any():
-                    new_corpus[cur_doc] = cur_doc_counts
-                    cur_doc += 1
+        for repo, doc_mapping in repo_mapping.items():
+            logger.info("\tProcessing repository '%s'", repo)
+            old_num_docs = sum(
+                len(delta_mapping)
+                for ref_mapping in doc_mapping.values()
+                for delta_mapping in ref_mapping.values()
+            )
+            new_num_docs = 0
+            for ref_mapping in doc_mapping.values():
+                cur_count: np.ndarray = np.zeros(num_words)
+                for ref in refs[repo]:
+                    if ref not in ref_mapping:
+                        continue
+                    if ADD in ref_mapping[ref]:
+                        cur_count += corpus[ref_mapping[ref][ADD]]
+                    if DEL in ref_mapping[ref]:
+                        cur_count += corpus[ref_mapping[ref][DEL]]
+                    if cur_count.any():
+                        new_corpus[cur_doc] = cur_count
+                        cur_doc += 1
+                        new_num_docs += 1
+            logger.info(
+                "Extracted %d documents out of %d delta-documents",
+                new_num_docs,
+                old_num_docs,
+            )
         num_docs = cur_doc
         corpus = new_corpus[:num_docs]
         logger.info("Recreated hall model corpus, found %d documents ..." % num_docs)

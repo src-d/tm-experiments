@@ -4,7 +4,8 @@ import pickle
 from typing import List
 
 from .cli import CLIBuilder, register_command
-from .io_constants import Dataset, DATASET_DIR
+from .data import Dataset
+from .io_constants import DATASET_DIR
 from .utils import check_file_exists, check_remove, create_logger, recursive_update
 
 

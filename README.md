@@ -35,16 +35,16 @@ data
     └── my-bow
         ├── my-artm-exp
         │   ├── doctopic.npy
-        │   └── wordtopic.npy
+        │   ├── wordtopic.npy
+        │   └── labels.txt
         └── my-hdp-exp
             ├── doctopic.npy
             └── wordtopic.npy
-
 ```
 
 For all commands we only specify the required arguments, check the optional ones with `docker run --rm -i tmexp $CMD --help`
 
-### Preprocess
+### `preprocess` command
 
 This command will allow you to create a dataset from a cloned git repository. Before launching the command, you will thus need to clone one (or multiple) repository in a directory, as well as start the Babelfish and Gitbase servers:
 
@@ -62,13 +62,13 @@ docker run --rm -it -v /path/to/data:/data \
   tmexp preprocess -r repo --dataset-name my-dataset
 ```
 
-Once your job is finished, the output file should be located in `/path/to/data/datasets/`. Unless you wish to run this command once more, you can remove the Babelfish and Gitbase containers, as they will not be of further use, with:
+Once this job is finished, the output file should be located in `/path/to/data/datasets/`. Unless you wish to run this command once more, you can remove the Babelfish and Gitbase containers, as they will not be of further use, with:
 
 `docker stop tmexp_gitbase tmexp_bblfshd`
 
 For the sake of explaining the next command, we assume you ran it a second time, and created a dataset named `my-dataset-2`.
 
-### Merge
+### `merge` command
 
 This command will allow you to merge multiple dataset created by the previous command. Assuming you created the two datasets, `my-dataset` and `my-dataset-2`, you can launch the merging with the following command:
 
@@ -77,9 +77,9 @@ docker run --rm -it -v /path/to/data:/data \
   tmexp merge -i my-dataset my-dataset-2 -r repo --dataset-name my-merged-dataset
 ```
 
-Once your job is finished, the output file should be located in `/path/to/data/datasets/`.
+Once this job is finished, the output file should be located in `/path/to/data/datasets/`.
 
-### Create BoW
+### `create-bow` command
 
 This command will allow you to create the input used for the topic modeling, ie bags of words, from datasets created by one of the above commads. You will need to choose between one of two topic evolution models, `hall` or `diff` (for more information, ou can check out [this paper](https://arxiv.org/abs/1704.00135)). You can launch the bag of words creation with the following command (don't forget to specify the dataset name and the topic evolution model you want to use):
 
@@ -88,9 +88,9 @@ docker run --rm -it -v /path/to/data:/data \
   tmexp create-bow --topic-model diff --dataset-name my-dataset --bow-name my-bow
 ```
 
-Once your job is finished, the output files should be located in `/path/to/data/bows/my-bow/`
+Once this job is finished, the output files should be located in `/path/to/data/bows/my-bow/`
 
-### Train ARTM
+### `train-artm` command
 
 This command will allow you to create an ARTM model from the bags-of-words created previously. You will need to specify the minimum amount of documents belonging to a given topic (by default, belonging means the document has a topic probability over .5) for this topic to be kept, which can either be an absolute number of documents, or relative to the number of documents. You can launch the training with the following command (don't forget to specify the bow name and one of the `min-docs` arguments):
 
@@ -99,9 +99,9 @@ docker run --rm -it -v /path/to/data:/data \
   tmexp train-artm --bow-name my-bow --exp-name my-artm-exp --min-docs-abs 1
 ```
 
-Once your job is finished, the output files should be located in `/path/to/data/topics/my-bow/my-artm-exp`.
+Once this job is finished, the output files should be located in `/path/to/data/topics/my-bow/my-artm-exp`.
 
-### Train HDP
+### `train-hdp`command
 
 This command will allow you to create an HDP model from the bags-of-words created previously. You can launch the training with the following command (don't forget to specify the bow name):
 
@@ -110,4 +110,15 @@ docker run --rm -it -v /path/to/data:/data \
   tmexp train-hdp --bow-name my-bow --exp-name my-hdp-exp
 ```
 
-Once your job is finished, the output files should be located in `/path/to/data/topics/my-bow/my-hdp-exp`.
+Once this job is finished, the output files should be located in `/path/to/data/topics/my-bow/my-hdp-exp`.
+
+### `label` command
+
+This command automatically computes labels for topics of a previously created model (don't forget to specify the bow and experience name):
+
+```
+docker run --rm -it -v /path/to/data:/data \
+  tmexp label --bow-name my-bow --exp-name my-artm-exp
+```
+
+Once this job is finished, the output files should be located in `/path/to/data/topics/my-bow/my-artm-exp`.
