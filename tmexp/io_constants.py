@@ -1,5 +1,5 @@
 from collections import Counter
-from typing import Counter as CounterType, Dict, List, NamedTuple, Set
+from typing import Counter as CounterType, DefaultDict, Dict, List, NamedTuple, Set
 
 DATASET_DIR = "/data/datasets"
 
@@ -80,6 +80,13 @@ MEMBERSHIP_FILENAME = "membership.pkl"
 WORDCOUNT_FILENAME = "wordcount.pkl"
 METRICS_FILENAME = "metrics.pkl"
 LABELS_FILENAME = "labels.txt"
+
+
+DeltaMapping = Dict[str, int]
+RefMapping = DefaultDict[str, DeltaMapping]
+DocMapping = DefaultDict[str, RefMapping]
+RepoMapping = DefaultDict[str, DocMapping]
+
 
 VIZ_DIR = "/data/visualisations"
 HEATMAP_FILENAME = "heatmap_%s.png"
