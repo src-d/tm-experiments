@@ -214,9 +214,9 @@ def create_bow(
         for doc_name in sorted(evolution_model):
             doc_evolution = evolution_model[doc_name]
             for i, refs in enumerate(doc_evolution.refs):
-                doc_name = SEP.join([doc_name, str(i)])
-                document_index[doc_name] = num_docs
-                fout.write(" ".join([doc_name] + refs) + "\n")
+                doc_name_ind = SEP.join([doc_name, str(i)])
+                document_index[doc_name_ind] = num_docs
+                fout.write(" ".join([doc_name_ind] + refs) + "\n")
                 num_docs += 1
     logger.info("Number of distinct documents : %d" % num_docs)
     logger.info("Saved document index in '%s'" % doc_output_path)
@@ -244,10 +244,10 @@ def create_bow(
         fout.write("%d\n" * 3 % (num_docs, num_words, num_nnz))
         for doc_name, doc_evolution in evolution_model.items():
             for i, bow in enumerate(doc_evolution.bows):
-                doc_name = SEP.join([doc_name, str(i)])
+                doc_name_ind = SEP.join([doc_name, str(i)])
                 for word, count in bow.items():
                     fout.write(
                         "%d %d %d\n"
-                        % (document_index[doc_name], word_index[word], count)
+                        % (document_index[doc_name_ind], word_index[word], count)
                     )
     logger.info("Saved bags of words in '%s'" % docword_output_path)
