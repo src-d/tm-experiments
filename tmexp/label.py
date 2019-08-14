@@ -1,14 +1,17 @@
 from argparse import ArgumentParser
 from collections import defaultdict
+from enum import Enum
+from functools import partial
 import itertools
+import logging
 import os
-from typing import DefaultDict, Dict, List, Union
+from typing import Callable, DefaultDict, Dict, List, Optional, Union
 
 import numpy as np
 
 from .cli import CLIBuilder, register_command
 from .create_bow import ADD, DEL, DIFF_MODEL, HALL_MODEL, SEP
-from .data import RefList, RepoMapping
+from .data import FileReducer, RefList, RefMapping, RepoMapping
 from .io_constants import (
     BOW_DIR,
     DOC_FILENAME,
@@ -20,6 +23,8 @@ from .io_constants import (
     WORDTOPIC_FILENAME,
 )
 from .utils import check_file_exists, check_range, check_remove, create_logger
+
+DOC = "doc"
 
 
 def _define_parser(parser: ArgumentParser) -> None:
@@ -61,6 +66,167 @@ def _define_parser(parser: ArgumentParser) -> None:
         dest="smoothing",
         action="store_false",
     )
+    parser.add_argument(
+        "--context",
+        help="Context creation method.",
+        choices=list(Context),
+        type=Context.from_string,
+        required=True,
+    )
+
+
+def reduce_corpus(
+    corpus: np.ndarray,
+    logger: logging.Logger,
+    repo_mapping: RepoMapping,
+    refs: DefaultDict[str, RefList],
+    file_reducer: FileReducer,
+) -> np.ndarray:
+    new_corpus = np.zeros_like(corpus)
+    cur_doc_ind = -1
+    for repo, file_mapping in repo_mapping.items():
+        logger.info("\tProcessing repository '%s'", repo)
+        new_num_docs = 0
+        for ref_mapping in file_mapping.values():
+            num_added_docs = file_reducer(
+                corpus, new_corpus, refs[repo], ref_mapping, cur_doc_ind
+            )
+            new_num_docs += num_added_docs
+            cur_doc_ind += num_added_docs
+        logger.info("\tExtracted %d documents.", new_num_docs)
+    num_docs = cur_doc_ind + 1
+    return new_corpus[:num_docs]
+
+
+def diff_to_hall_reducer(
+    corpus: np.ndarray,
+    new_corpus: np.ndarray,
+    refs: RefList,
+    ref_mapping: RefMapping,
+    cur_doc_ind: int,
+) -> int:
+    cur_count: np.ndarray = np.zeros_like(corpus[0])
+    prev_add_doc, prev_del_doc = None, None
+    new_num_docs = 0
+    for ref in refs:
+        if ref not in ref_mapping:
+            continue
+        cur_add_doc = ref_mapping[ref].get(ADD)
+        cur_del_doc = ref_mapping[ref].get(DEL)
+
+        new_doc = cur_add_doc != prev_add_doc or cur_del_doc != prev_del_doc
+        if new_doc:
+            if cur_add_doc != prev_add_doc:
+                cur_count += corpus[cur_add_doc]
+                prev_add_doc = cur_add_doc
+            if cur_del_doc != prev_del_doc:
+                cur_count -= corpus[cur_del_doc]
+                prev_del_doc = cur_del_doc
+        if cur_count.any():
+            new_num_docs += int(new_doc)
+            new_corpus[cur_doc_ind + new_num_docs] = cur_count
+            ref_mapping[ref][DOC] = cur_doc_ind + new_num_docs
+    return new_num_docs
+
+
+def last_ref_reducer(
+    corpus: np.ndarray,
+    new_corpus: np.ndarray,
+    refs: RefList,
+    ref_mapping: RefMapping,
+    cur_doc_ind: int,
+) -> int:
+    if refs[-1] in ref_mapping and DOC in ref_mapping[refs[-1]]:
+        new_corpus[cur_doc_ind + 1] = corpus[ref_mapping[refs[-1]][DOC]]
+    return 1
+
+
+def numpy_op_reducer(
+    corpus: np.ndarray,
+    new_corpus: np.ndarray,
+    _: RefList,
+    ref_mapping: RefMapping,
+    cur_doc_ind: int,
+    numpy_op: Callable[..., np.ndarray],
+) -> int:
+    doc_inds = [
+        doc_mapping[DOC] for doc_mapping in ref_mapping.values() if DOC in doc_mapping
+    ]
+    new_corpus[cur_doc_ind + 1] = numpy_op(corpus[doc_inds], axis=0)
+    return 1
+
+
+def max_reducer(
+    corpus: np.ndarray,
+    new_corpus: np.ndarray,
+    refs: RefList,
+    ref_mapping: RefMapping,
+    cur_doc_ind: int,
+) -> int:
+    return numpy_op_reducer(corpus, new_corpus, refs, ref_mapping, cur_doc_ind, np.max)
+
+
+def mean_reducer(
+    corpus: np.ndarray,
+    new_corpus: np.ndarray,
+    refs: RefList,
+    ref_mapping: RefMapping,
+    cur_doc_ind: int,
+) -> int:
+    return numpy_op_reducer(corpus, new_corpus, refs, ref_mapping, cur_doc_ind, np.mean)
+
+
+def median_reducer(
+    corpus: np.ndarray,
+    new_corpus: np.ndarray,
+    refs: RefList,
+    ref_mapping: RefMapping,
+    cur_doc_ind: int,
+) -> int:
+    return numpy_op_reducer(
+        corpus, new_corpus, refs, ref_mapping, cur_doc_ind, np.median
+    )
+
+
+def concat_reducer(
+    corpus: np.ndarray,
+    new_corpus: np.ndarray,
+    refs: RefList,
+    ref_mapping: RefMapping,
+    cur_doc_ind: int,
+) -> int:
+    prev_doc = np.zeros(corpus[0])
+    empty_doc = np.zeros(corpus[0])
+    for ref in refs:
+        if ref not in ref_mapping or DOC not in ref_mapping[ref]:
+            continue
+        cur_doc = corpus[ref_mapping[ref][DOC]]
+        new_corpus[cur_doc_ind] += np.maximum(empty_doc, cur_doc - prev_doc)
+        prev_doc = cur_doc
+    return 1
+
+
+class Context(Enum):
+    last = partial(last_ref_reducer)
+    max = partial(max_reducer)
+    mean = partial(mean_reducer)
+    median = partial(median_reducer)
+    concat = partial(concat_reducer)
+    hall = None
+
+    def __str__(self) -> str:
+        return self.name
+
+    @staticmethod
+    def from_string(s: str) -> "Context":
+        try:
+            return Context[s]
+        except KeyError:
+            raise ValueError()
+
+    @property
+    def reducer(self) -> Optional[FileReducer]:
+        return self.value
 
 
 @register_command(parser_definer=_define_parser)
@@ -74,6 +240,7 @@ def label(
     min_prob: float,
     max_topics: int,
     smoothing: bool,
+    context: Context,
 ) -> None:
     """Infer a label for each topic automatically given a topic model."""
     logger = create_logger(log_level, __name__)
@@ -96,83 +263,65 @@ def label(
 
     check_range(min_prob, "min-prob")
 
+    logger.info("Loading tagged refs ...")
+    with open(refs_input_path, "r", encoding="utf-8") as fin:
+        refs: DefaultDict[str, RefList] = defaultdict(RefList)
+        for line in fin:
+            repo, ref = line.split(SEP)
+            refs[repo].append(ref.replace("\n", ""))
+    logger.info("Loaded tagged refs:")
+    for repo, repo_refs in refs.items():
+        logger.info("\tRepository '%s': %d refs", repo, len(repo_refs))
+
     logger.info("Loading document index ...")
     with open(doc_input_path, "r", encoding="utf-8") as fin:
         line = fin.readline()
         if SEP + ADD in line or SEP + DEL in line:
-            topic_model, doc_type = DIFF_MODEL, "delta-documents"
-            fin.seek(0)
-            repo_mapping = RepoMapping()
-            for doc_ind, line in enumerate(fin):
-                doc_info = line.split()
-                repo, file_path, delta_type, _ = doc_info[0].split(SEP)
-                first_ref = doc_info[1]
-                repo_mapping[repo][file_path][first_ref][delta_type] = doc_ind
-
+            topic_model = DIFF_MODEL
         else:
-            topic_model, doc_type = HALL_MODEL, "documents"
-    logger.info("Loaded document index, detected %s topic model." % topic_model)
+            topic_model = HALL_MODEL
+        fin.seek(0)
+        repo_mapping = RepoMapping()
+        for doc_ind, line in enumerate(fin):
+            doc_info = line.split()
+            if topic_model == HALL_MODEL:
+                repo, file_path, _ = doc_info[0].split(SEP)
+                delta_type = DOC
+            else:
+                repo, file_path, delta_type, _ = doc_info[0].split(SEP)
+            for ref in doc_info[1:]:
+                repo_mapping[repo][file_path][ref][delta_type] = doc_ind
+    logger.info("Loaded document index, detected %s topic model.", topic_model)
 
     logger.info("Loading bags of words ...")
     with open(docword_input_path, "r", encoding="utf-8") as fin:
         num_docs = int(fin.readline())
         num_words = int(fin.readline())
-        num_bags = int(fin.readline())
+        fin.readline()
         corpus = np.zeros((num_docs, num_words))
         for line in fin:
             doc_id, word_id, count = map(int, line.split())
             corpus[doc_id, word_id - 1] = count
-    logger.info("Loaded %d bags of words from %d %s.", num_bags, num_docs, doc_type)
-    if topic_model == DIFF_MODEL:
-        logger.info("Loading tagged refs ...")
-        with open(refs_input_path, "r", encoding="utf-8") as fin:
-            refs: DefaultDict[str, RefList] = defaultdict(RefList)
-            for line in fin:
-                repo, ref = line.split(SEP)
-                refs[repo].append(ref.replace("\n", ""))
-        logger.info("Loaded tagged refs:")
-        for repo, repo_refs in refs.items():
-            logger.info("\tRepository '%s': %d refs", repo, len(repo_refs))
-        logger.info("Recreating hall model corpus (we can't use %s) ..." % doc_type)
+    logger.info("Loaded %d bags of words.", num_docs)
 
-        new_corpus = np.zeros((num_docs, num_words))
-        cur_doc = 0
-        for repo, doc_mapping in repo_mapping.items():
-            logger.info("\tProcessing repository '%s'", repo)
-            old_num_docs = sum(
-                len(delta_mapping)
-                for ref_mapping in doc_mapping.values()
-                for delta_mapping in ref_mapping.values()
-            )
-            new_num_docs = 0
-            for ref_mapping in doc_mapping.values():
-                cur_count: np.ndarray = np.zeros(num_words)
-                for ref in refs[repo]:
-                    if ref not in ref_mapping:
-                        continue
-                    if ADD in ref_mapping[ref]:
-                        cur_count += corpus[ref_mapping[ref][ADD]]
-                    if DEL in ref_mapping[ref]:
-                        cur_count += corpus[ref_mapping[ref][DEL]]
-                    if cur_count.any():
-                        new_corpus[cur_doc] = cur_count
-                        cur_doc += 1
-                        new_num_docs += 1
-            logger.info(
-                "Extracted %d documents out of %d delta-documents",
-                new_num_docs,
-                old_num_docs,
-            )
-        num_docs = cur_doc
-        corpus = new_corpus[:num_docs]
-        logger.info("Recreated hall model corpus, found %d documents ..." % num_docs)
+    if topic_model == DIFF_MODEL:
+        logger.info("Recreating hall model corpus (we can't use delta-documents) ...")
+        corpus = reduce_corpus(corpus, logger, repo_mapping, refs, diff_to_hall_reducer)
+        num_docs = corpus.shape[0]
+        logger.info("Recreated hall model corpus, found %d documents ...", num_docs)
+
+    if context.reducer is not None:
+        logger.info("Creating %s context ...", str(context))
+        corpus = reduce_corpus(corpus, logger, repo_mapping, refs, context.reducer)
+        num_docs = corpus.shape[0]
+        logger.info("Created context, found %d documents ...", num_docs)
 
     logger.info("Loading word index ...")
     with open(vocab_input_path, "r", encoding="utf-8") as fin:
         word_index: Dict[int, str] = {
             i: word.replace("\n", "") for i, word in enumerate(fin)
         }
-    logger.info("Loaded word index, found %d words." % num_words)
+    logger.info("Loaded word index, found %d words.", num_words)
 
     logger.info("Loading word topic distributions ...")
     topic_words = np.load(wordtopic_input_path)
@@ -190,18 +339,23 @@ def label(
         min_prob,
         max_topics,
     )
-
+    if len(common_words) == num_words:
+        logger.info("All words were excluded, cannot infer label.")
+        return
     coeff = mu / (num_topics - 1)
     words_counts = np.sum(corpus, axis=0)
     logger.info("Inferring labels for each topic ...")
     best_labels_per_topic: Dict[int, Dict[str, float]] = {}
     best_scores: Dict[str, float] = defaultdict(lambda: -np.inf)
     for cur_topic in range(num_topics):
-        logger.info("Topic %d:" % (cur_topic + 1))
+        logger.info("Topic %d:", cur_topic + 1)
         num_admissible = len(np.argwhere(topic_words[cur_topic] > min_prob).flatten())
         admissible_words = np.argwhere(
             topic_words[cur_topic, mask] > min_prob
         ).flatten()
+        if not len(admissible_words):
+            logger.info("No admissible words where found, cannot infer label.")
+            return
         logger.info(
             "\tFound %d words with probability over %.4f, %d remained after removing "
             "common words.",
@@ -220,9 +374,10 @@ def label(
                 candidates_counts.append(np.prod(corpus[:, list(candidate)], axis=1))
                 candidates_sizes.append(len(candidate))
         num_cand = len(candidates_names)
-        logger.info(
-            "\tFound %d candidate labels, computing their scores ..." % num_cand
-        )
+        if not num_cand:
+            logger.info("No candidates where found, cannot infer label.")
+            return
+        logger.info("\tFound %d candidate labels, computing their scores ...", num_cand)
         candidates_counts = np.array(candidates_counts)
         joint_counts = candidates_counts @ corpus
         candidates_counts = np.sum(candidates_counts, axis=1)
@@ -275,4 +430,4 @@ def label(
     logger.info("Saving topic labels ...")
     with open(labels_output_path, "w", encoding="utf-8") as fout:
         fout.write("\n".join(label for label in topic_labels))
-    logger.info("Saved topic labels in '%s'." % labels_output_path)
+    logger.info("Saved topic labels in '%s'.", labels_output_path)

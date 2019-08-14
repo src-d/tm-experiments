@@ -1,4 +1,6 @@
-from typing import Any, Counter, DefaultDict, Dict, List, NamedTuple, Set
+from typing import Any, Callable, Counter, DefaultDict, Dict, List, NamedTuple, Set
+
+import numpy as np
 
 
 class FileInfo(NamedTuple):
@@ -90,23 +92,26 @@ class EvolutionModel(Dict[str, DocumentEvolution]):
 # ------------------------------------------------------------------
 
 
-class DeltaMapping(Dict[str, int]):
+class DocMapping(Dict[str, int]):
     pass
 
 
-class RefMapping(DefaultDict[str, DeltaMapping]):
+class RefMapping(DefaultDict[str, DocMapping]):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
-        self.default_factory = DeltaMapping  # type: ignore
+        self.default_factory = DocMapping  # type: ignore
 
 
-class DocMapping(DefaultDict[str, RefMapping]):
+class FileMapping(DefaultDict[str, RefMapping]):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self.default_factory = RefMapping  # type: ignore
 
 
-class RepoMapping(DefaultDict[str, DocMapping]):
+class RepoMapping(DefaultDict[str, FileMapping]):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
-        self.default_factory = DocMapping  # type: ignore
+        self.default_factory = FileMapping  # type: ignore
+
+
+FileReducer = Callable[[np.ndarray, np.ndarray, RefList, RefMapping, int], int]

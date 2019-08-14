@@ -116,9 +116,9 @@ def create_bow(
                 bows[blob_hash] = bow
                 doc_freq.update(bow.keys())
             doc_evolution = DocumentEvolution(bows=[], refs=[])
-            prev_blob_hash = None
             seen_blobs: Set[str] = set()
             refs = input_dataset.refs[repo]
+            prev_bow = None
             for ref in refs:
                 file_info = input_dataset.files_info[repo][ref].get(file_path)
                 if file_info is None:
@@ -132,12 +132,12 @@ def create_bow(
                     cur_blob_hash = file_info.blob_hash
                     cur_bow = bows[cur_blob_hash]
                     seen_blobs.add(cur_blob_hash)
-                if cur_blob_hash == prev_blob_hash:
+                if prev_bow == cur_bow:
                     doc_evolution.refs[-1].append(ref)
                 else:
                     doc_evolution.bows.append(cur_bow)
                     doc_evolution.refs.append(RefList([ref]))
-                    prev_blob_hash = cur_blob_hash
+                    prev_bow = cur_bow
             if not doc_evolution.bows:
                 continue
             num_blobs += len(seen_blobs)
@@ -149,9 +149,9 @@ def create_bow(
                 prev_bow = WordCount()
                 for bow, refs in zip(doc_evolution.bows, doc_evolution.refs):
                     added_evolution.bows.append(bow - prev_bow)
-                    added_evolution.refs.append(refs)
+                    added_evolution.refs.append(RefList(refs))
                     removed_evolution.bows.append(prev_bow - bow)
-                    removed_evolution.refs.append(refs)
+                    removed_evolution.refs.append(RefList(refs))
                     prev_bow = bow
                 evolution_model[SEP.join([repo, file_path, ADD])] = added_evolution
                 evolution_model[SEP.join([repo, file_path, DEL])] = removed_evolution
@@ -175,15 +175,17 @@ def create_bow(
         for doc_name in sorted(evolution_model):
             doc_evolution = evolution_model.pop(doc_name)
             pruned_evolution = DocumentEvolution(bows=[], refs=[])
-            for bow, refs in zip(doc_evolution.bows, doc_evolution.refs):
+            prev_bow = None
+            for cur_bow, refs in zip(doc_evolution.bows, doc_evolution.refs):
                 for word in blacklisted_words:
-                    if word in bow:
-                        del bow[word]
-                if bow:
-                    pruned_evolution.bows.append(bow)
+                    if word in cur_bow:
+                        del cur_bow[word]
+                if cur_bow and (cur_bow != prev_bow or topic_model == DIFF_MODEL):
+                    pruned_evolution.bows.append(cur_bow)
                     pruned_evolution.refs.append(refs)
-                elif topic_model == DIFF_MODEL and pruned_evolution.bows:
+                elif pruned_evolution.bows:
                     pruned_evolution.refs[-1] += refs
+                prev_bow = cur_bow
             if pruned_evolution.bows:
                 evolution_model[doc_name] = pruned_evolution
     num_bows = sum(
