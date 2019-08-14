@@ -339,7 +339,9 @@ def label(
         min_prob,
         max_topics,
     )
-
+    if len(common_words) == num_words:
+        logger.info("All words were excluded, cannot infer label.")
+        return
     coeff = mu / (num_topics - 1)
     words_counts = np.sum(corpus, axis=0)
     logger.info("Inferring labels for each topic ...")
@@ -351,6 +353,9 @@ def label(
         admissible_words = np.argwhere(
             topic_words[cur_topic, mask] > min_prob
         ).flatten()
+        if not len(admissible_words):
+            logger.info("No admissible words where found, cannot infer label.")
+            return
         logger.info(
             "\tFound %d words with probability over %.4f, %d remained after removing "
             "common words.",
@@ -369,6 +374,9 @@ def label(
                 candidates_counts.append(np.prod(corpus[:, list(candidate)], axis=1))
                 candidates_sizes.append(len(candidate))
         num_cand = len(candidates_names)
+        if not num_cand:
+            logger.info("No candidates where found, cannot infer label.")
+            return
         logger.info("\tFound %d candidate labels, computing their scores ...", num_cand)
         candidates_counts = np.array(candidates_counts)
         joint_counts = candidates_counts @ corpus
