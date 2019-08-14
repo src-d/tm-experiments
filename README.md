@@ -2,7 +2,7 @@
 
 ## Getting Started
 
-_In the following we do not do so, however it is good practice to limit the amount of memory docker containers have access to with the `-m` flag._
+_In the following we do not do so, however, it is good practice to limit the amount of memory docker containers have access to with the `-m` flag._
 
 Start by cloning the repository, and building the docker image:
 
@@ -17,7 +17,7 @@ If you have GPU(s) and want to use our lit [Neural Identifier Splitter](https://
 docker build tm-experiments -t tmexp --build-arg USE_NN=true
 ```
 
-In all of the following, all of the created data will be stored in a single directory (hereinafter referred to as `/path/to/data`), which would have the following structure if you were to run with the exact same names:
+In all of the following, the created data will be stored in a single directory (hereinafter referred to as `/path/to/data`), which would have the following structure if you were to run each command with the exact same arguments:
 
 ```
 data
@@ -42,11 +42,11 @@ data
             └── wordtopic.npy
 ```
 
-For all commands we only specify the required arguments, check the optional ones with `docker run --rm -i tmexp $CMD --help`
+For each commands we only specify the required arguments, check the optional ones with `docker run --rm -i tmexp $CMD --help`.
 
 ### `preprocess` command
 
-This command will allow you to create a dataset from a cloned git repository. Before launching the command, you will thus need to clone one (or multiple) repository in a directory, as well as start the Babelfish and Gitbase servers:
+This command will create a dataset from a cloned git repository. Before launching the command, you will thus need to clone one (or multiple) repository in a directory, as well as start the [Babelfish](https://doc.bblf.sh/) and [Gitbase](https://docs.sourced.tech/gitbase/) servers:
 
 ```
 make start REPOS=~/path/to/cloned/repos
@@ -70,7 +70,7 @@ For the sake of explaining the next command, we assume you ran it a second time,
 
 ### `merge` command
 
-This command will allow you to merge multiple dataset created by the previous command. Assuming you created the two datasets, `my-dataset` and `my-dataset-2`, you can launch the merging with the following command:
+This command will merge multiple dataset created by the previous command. Assuming you created the two datasets, `my-dataset` and `my-dataset-2`, you can launch the merging with the following command:
 
 ```
 docker run --rm -it -v /path/to/data:/data \ 
@@ -81,7 +81,13 @@ Once this job is finished, the output file should be located in `/path/to/data/d
 
 ### `create-bow` command
 
-This command will allow you to create the input used for the topic modeling, ie bags of words, from datasets created by one of the above commads. You will need to choose between one of two topic evolution models, `hall` or `diff` (for more information, ou can check out [this paper](https://arxiv.org/abs/1704.00135)). You can launch the bag of words creation with the following command (don't forget to specify the dataset name and the topic evolution model you want to use):
+This command will create the input used for the topic modeling, ie bags of words, from datasets created by one of the above commands. You will need to choose between one of two topic evolution models:
+- `hall`: each blob is considered to be a document 
+- `diff`: we create _delta-documents_ of added and deleted words for each series of documents in the hall model, using the tagged reference order for each repository
+
+For more information about these evolutions models, you can check out [this paper](https://arxiv.org/abs/1704.00135).
+
+You can launch the bag of words creation with the following command (don't forget to specify the dataset name and the topic evolution model you want to use):
 
 ```
 docker run --rm -it -v /path/to/data:/data \
@@ -92,7 +98,9 @@ Once this job is finished, the output files should be located in `/path/to/data/
 
 ### `train-artm` command
 
-This command will allow you to create an ARTM model from the bags-of-words created previously. You will need to specify the minimum amount of documents belonging to a given topic (by default, belonging means the document has a topic probability over .5) for this topic to be kept, which can either be an absolute number of documents, or relative to the number of documents. You can launch the training with the following command (don't forget to specify the bow name and one of the `min-docs` arguments):
+This command will create an ARTM model from the bags-of-words created previously. You will need to specify the minimum amount of documents belonging to a given topic (by default, belonging means the document has a topic probability over .5) for this topic to be kept, which can either be an absolute number of documents, or relative to the number of documents. For more information about ARTM models, you can check out [this paper](https://link.springer.com/article/10.1007/s10994-014-5476-6) or the [BigARTM documentation](http://docs.bigartm.org/en/stable/index.html).
+
+You can launch the training with the following command (don't forget to specify the bow name and one of the `min-docs` arguments):
 
 ```
 docker run --rm -it -v /path/to/data:/data \
@@ -103,7 +111,9 @@ Once this job is finished, the output files should be located in `/path/to/data/
 
 ### `train-hdp`command
 
-This command will allow you to create an HDP model from the bags-of-words created previously. You can launch the training with the following command (don't forget to specify the bow name):
+This command will allow you to create an HDP model from the bags-of-words created previously. For more information about HDP models, [this paper](https://people.eecs.berkeley.edu/~jordan/papers/hdp.pdf) or the [Gensim documentation](https://radimrehurek.com/gensim/models/hdpmodel.html).
+
+You can launch the training with the following command (don't forget to specify the bow name):
 
 ```
 docker run --rm -it -v /path/to/data:/data \
@@ -114,11 +124,19 @@ Once this job is finished, the output files should be located in `/path/to/data/
 
 ### `label` command
 
-This command automatically computes labels for topics of a previously created model (don't forget to specify the bow and experience name):
+This command will automatically label topics of a previously created model. You will need to choose between one of the following context creation methods, used to computed word probabilities:
+- `hall`: the context will be the hall model of the corpus, ie each blob will be a document in the context
+- `last`: blobs from only the last reference of each repo will be a document in the context
+- `mean`/`median`/`max`: the mean, max or median word count of each document (from the hall model) across all refs where it exists will be taken as a document in the context
+- `concat`: the concatenation of all **added** delta-documents (from the diff model) of the corpus will be a document in the context
+
+For more information about the method used to label topics, you can check out [this paper](https://arxiv.org/abs/1704.00135).
+
+You can launch the labeling with the following command (don't forget to specify the bow name, experience name and one the context creation method):
 
 ```
 docker run --rm -it -v /path/to/data:/data \
-  tmexp label --bow-name my-bow --exp-name my-artm-exp
+  tmexp label --bow-name my-bow --exp-name my-artm-exp --context hall
 ```
 
-Once this job is finished, the output files should be located in `/path/to/data/topics/my-bow/my-artm-exp`.
+Once this job is finished, the output file should be located in `/path/to/data/topics/my-bow/my-artm-exp`.
