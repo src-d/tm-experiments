@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+import logging
 import os
 from typing import Dict, List, Tuple
 
@@ -10,6 +11,7 @@ from .cli import CLIBuilder, register_command
 from .io_constants import (
     BOW_DIR,
     DOCTOPIC_FILENAME,
+    DOCWORD_CONCAT_FILENAME,
     DOCWORD_FILENAME,
     TOPICS_DIR,
     VOCAB_FILENAME,
@@ -23,6 +25,7 @@ def _define_parser(parser: ArgumentParser) -> None:
     cli_builder.add_bow_arg(required=True)
     cli_builder.add_experiment_arg(required=False)
     cli_builder.add_force_arg()
+    cli_builder.add_consolidate_arg()
 
     parser.add_argument(
         "--chunk-size", help="Number of documents in one chunk.", default=256, type=int
@@ -67,6 +70,23 @@ def _define_parser(parser: ArgumentParser) -> None:
     )
 
 
+GensimCorpus = List[List[Tuple[int, int]]]
+
+
+def create_gensim_corpus(input_path: str, logger: logging.Logger) -> GensimCorpus:
+    with open(input_path, "r", encoding="utf-8") as fin:
+        corpus: GensimCorpus = [[] for _ in range(int(fin.readline()))]
+        logger.info("\tNumber of documents: %d", len(corpus))
+        num_words = int(fin.readline())
+        logger.info("\tNumber of words: %d", num_words)
+        num_rows = int(fin.readline())
+        logger.info("\tNumber of document/word pairs: %d", num_rows)
+        for line in tqdm.tqdm(fin, total=num_rows):
+            doc_id, word_id, count = map(int, line.split())
+            corpus[doc_id].append((word_id - 1, count))
+    return corpus
+
+
 @register_command(parser_definer=_define_parser)
 def train_hdp(
     bow_name: str,
@@ -82,6 +102,7 @@ def train_hdp(
     eta: float,
     scale: float,
     var_converge: float,
+    consolidate: bool,
     log_level: str,
 ) -> None:
     """Train an HDP model from the input BoW."""
@@ -92,6 +113,9 @@ def train_hdp(
     check_file_exists(words_input_path)
     docword_input_path = os.path.join(input_dir, DOCWORD_FILENAME)
     check_file_exists(docword_input_path)
+    if consolidate:
+        docword_concat_input_path = os.path.join(input_dir, DOCWORD_CONCAT_FILENAME)
+        check_file_exists(docword_concat_input_path)
 
     output_dir = os.path.join(TOPICS_DIR, bow_name, exp_name)
     doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILENAME)
@@ -100,31 +124,24 @@ def train_hdp(
     check_remove(wordtopic_output_path, logger, force)
     create_directory(output_dir, logger)
 
-    logger.info("Loading bags of words ...")
-    with open(docword_input_path, "r", encoding="utf-8") as fin:
-        corpus: List[List[Tuple[int, int]]] = [[] for _ in range(int(fin.readline()))]
-        logger.info("Number of documents: %d", len(corpus))
-        num_words = int(fin.readline())
-        logger.info("Number of words: %d", num_words)
-        num_rows = int(fin.readline())
-        logger.info("Number of document/word pairs: %d", num_rows)
-        for line in tqdm.tqdm(fin, total=num_rows):
-            doc_id, word_id, count = map(int, line.split())
-            corpus[doc_id].append((word_id - 1, count))
-    logger.info("Corpus created.")
-
     logger.info("Loading vocabulary ...")
     with open(words_input_path, "r", encoding="utf-8") as fin:
         word_index: Dict[int, str] = {
             i: word.replace("\n", "") for i, word in enumerate(fin)
         }
-    id2word = gensim.corpora.Dictionary.from_corpus(corpus, word_index)
-    logger.info("Word index created.")
+
+    logger.info("Creating corpus ...")
+    corpus = create_gensim_corpus(docword_input_path, logger)
+    if consolidate:
+        logger.info("Creating training corpus ...")
+        training_corpus = create_gensim_corpus(docword_concat_input_path, logger)
+    else:
+        training_corpus = corpus
 
     logger.info("Training HDP model ...")
     hdp = gensim.models.HdpModel(
-        corpus,
-        id2word,
+        training_corpus,
+        gensim.corpora.Dictionary.from_corpus(training_corpus, word_index),
         chunksize=chunk_size,
         kappa=kappa,
         tau=tau,
