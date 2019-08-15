@@ -139,3 +139,10 @@ class CLIBuilder:
 
     def _add_required(self, flag: str, help: str) -> None:
         self.parser.add_argument(flag, help=help, required=True)
+
+    def add_consolidate_arg(self) -> None:
+        self.parser.add_argument(
+            "--consolidate",
+            help="To use consolidated corpus during training (only for diff model).",
+            action="store_true",
+        )
