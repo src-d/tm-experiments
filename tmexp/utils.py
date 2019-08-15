@@ -90,7 +90,13 @@ def check_range(
         )
 
 
-def check_remove(path: str, logger: Logger, force: bool, is_dir: bool = False) -> None:
+def check_remove(
+    path: str,
+    logger: Logger,
+    force: bool,
+    is_dir: bool = False,
+    is_symlink: bool = False,
+) -> None:
     if os.path.exists(path):
         if not force:
             raise RuntimeError(
@@ -101,6 +107,11 @@ def check_remove(path: str, logger: Logger, force: bool, is_dir: bool = False) -
                 raise RuntimeError("'%s' is a file or a link, aborting." % path)
             logger.warn("Directory '%s' already exists, removing it." % path)
             shutil.rmtree(path)
+        if is_symlink:
+            if not os.path.islink(path):
+                raise RuntimeError("'%s' is a directory or a file, aborting." % path)
+            logger.warn("Symbolic link '%s' already exists, removing it." % path)
+            os.unlink(path)
         else:
             if not os.path.isfile(path):
                 raise RuntimeError("'%s' is a directory or a link, aborting." % path)
