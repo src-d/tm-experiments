@@ -11,8 +11,10 @@ from .io_constants import (
     BOW_DIR,
     DATASET_DIR,
     DOC_FILENAME,
+    DOCWORD_CONCAT_FILENAME,
     DOCWORD_FILENAME,
     REF_FILENAME,
+    VOCAB_CONCAT_FILENAME,
     VOCAB_FILENAME,
 )
 from .utils import (
@@ -82,14 +84,19 @@ def create_bow(
 
     output_dir = os.path.join(BOW_DIR, bow_name)
     create_directory(output_dir, logger)
+    refs_output_path = os.path.join(output_dir, REF_FILENAME)
+    check_remove(refs_output_path, logger, force)
+    if topic_model == DIFF_MODEL:
+        words_concat_output_path = os.path.join(output_dir, VOCAB_CONCAT_FILENAME)
+        check_remove(words_concat_output_path, logger, force, is_symlink=True)
+        docword_concat_output_path = os.path.join(output_dir, DOCWORD_CONCAT_FILENAME)
+        check_remove(docword_concat_output_path, logger, force)
     words_output_path = os.path.join(output_dir, VOCAB_FILENAME)
     check_remove(words_output_path, logger, force)
     docword_output_path = os.path.join(output_dir, DOCWORD_FILENAME)
     check_remove(docword_output_path, logger, force)
     doc_output_path = os.path.join(output_dir, DOC_FILENAME)
     check_remove(doc_output_path, logger, force)
-    refs_output_path = os.path.join(output_dir, REF_FILENAME)
-    check_remove(refs_output_path, logger, force)
 
     check_range(min_word_frac, "min-word-frac")
     check_range(max_word_frac, "max-word-frac")
@@ -156,7 +163,7 @@ def create_bow(
                 evolution_model[SEP.join([repo, file_path, ADD])] = added_evolution
                 evolution_model[SEP.join([repo, file_path, DEL])] = removed_evolution
 
-    logger.info("Computed bag of words from %d blobs.", num_blobs)
+    logger.info("Computed bags of words from %d blobs.", num_blobs)
     if min_word_frac > 0 or max_word_frac < 1:
         min_word_blob = int(min_word_frac * num_blobs)
         max_word_blob = int(max_word_frac * num_blobs)
@@ -188,10 +195,13 @@ def create_bow(
                 prev_bow = cur_bow
             if pruned_evolution.bows:
                 evolution_model[doc_name] = pruned_evolution
-    num_bows = sum(
-        len(doc_evolution.bows) for doc_evolution in evolution_model.values()
-    )
-    logger.info("Final number of bag of words: %d", num_bows)
+
+    logger.info("Saving tagged refs ...")
+    with open(refs_output_path, "w", encoding="utf-8") as fout:
+        for repo, repo_refs in input_dataset.refs.items():
+            for ref in repo_refs:
+                fout.write("%s%s%s\n" % (repo, SEP, ref))
+    logger.info("Saved tagged refs in '%s'" % refs_output_path)
 
     logger.info("Creating word index ...")
     sorted_vocabulary = sorted(
@@ -199,7 +209,7 @@ def create_bow(
     )
     word_index = {word: i for i, word in enumerate(sorted_vocabulary, start=1)}
     num_words = len(word_index)
-    logger.info("Number of distinct words: %d" % num_words)
+    logger.info("Number of words: %d" % num_words)
     logger.info("Saving word index ...")
     with open(words_output_path, "w", encoding="utf-8") as fout:
         fout.write("%s\n" % "\n".join(sorted_vocabulary))
@@ -216,15 +226,8 @@ def create_bow(
                 document_index[doc_name_ind] = num_docs
                 fout.write(" ".join([doc_name_ind] + refs) + "\n")
                 num_docs += 1
-    logger.info("Number of distinct documents : %d" % num_docs)
+    logger.info("Number of documents : %d" % num_docs)
     logger.info("Saved document index in '%s'" % doc_output_path)
-
-    logger.info("Saving tagged refs ...")
-    with open(refs_output_path, "w", encoding="utf-8") as fout:
-        for repo, repo_refs in input_dataset.refs.items():
-            for ref in repo_refs:
-                fout.write("%s%s%s\n" % (repo, SEP, ref))
-    logger.info("Saved tagged refs in '%s'" % refs_output_path)
 
     num_nnz = sum(
         len(bow)
@@ -249,3 +252,39 @@ def create_bow(
                         % (document_index[doc_name_ind], word_index[word], count)
                     )
     logger.info("Saved bags of words in '%s'" % docword_output_path)
+
+    if topic_model == DIFF_MODEL:
+        logger.info("Creating consolidated corpus data ...")
+
+        logger.info("Creating symlink to the word index ...")
+        os.symlink(words_output_path, words_concat_output_path)
+        logger.info("Created symlink pointing to '%s'" % words_concat_output_path)
+
+        logger.info("Creating consolidated bags of words ...")
+        consolidated_bows: List[WordCount] = []
+        for doc_name, doc_evolution in evolution_model.items():
+            if doc_name.split(SEP)[-1] != ADD:
+                continue
+            consolidated_bow = WordCount()
+            for bow in doc_evolution.bows:
+                consolidated_bow.update(bow)
+            consolidated_bows.append(consolidated_bow)
+        num_docs = len(consolidated_bows)
+        logger.info("Number of consolidated documents : %d" % num_docs)
+        num_nnz = sum(len(bow) for bow in consolidated_bows)
+        logger.info(
+            "Found %d non-zero entries in the consolidated document-word co-occurence "
+            "matrix (sparsity of %.4f)",
+            num_nnz,
+            (num_docs * num_words - num_nnz) / (num_docs * num_words),
+        )
+
+        logger.info("Saving consolidated bags of words ...")
+        with open(docword_concat_output_path, "w", encoding="utf-8") as fout:
+            fout.write("%d\n" * 3 % (num_docs, num_words, num_nnz))
+            for doc_ind, bow in enumerate(consolidated_bows):
+                for word, count in bow.items():
+                    fout.write("%d %d %d\n" % (doc_ind, word_index[word], count))
+        logger.info(
+            "Saved consolidated bags of words in '%s'" % docword_concat_output_path
+        )
