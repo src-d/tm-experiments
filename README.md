@@ -85,16 +85,16 @@ This command will create the input used for the topic modeling, ie bags of words
 - `hall`: each blob is considered to be a document 
 - `diff`: we create _delta-documents_ of added and deleted words for each series of documents in the hall model, using the tagged reference order for each repository
 
-For more information about these evolutions models, you can check out [this paper](https://arxiv.org/abs/1704.00135).
+In the case of the `diff` model, two corpora will be created: one containing the delta-documents, as well as one where each document is the concatenation of all added delta-dcouments (a _consolidated_ document). For more information about these evolutions models, you can check out [this paper](https://arxiv.org/abs/1704.00135).
 
 You can launch the bag of words creation with the following command (don't forget to specify the dataset name and the topic evolution model you want to use):
 
 ```
 docker run --rm -it -v /path/to/data:/data \
-  tmexp create-bow --topic-model diff --dataset-name my-dataset --bow-name my-bow
+  tmexp create-bow --topic-model hall --dataset-name my-dataset --bow-name my-bow
 ```
 
-Once this job is finished, the output files should be located in `/path/to/data/bows/my-bow/`
+Once this job is finished, the output files should be located in `/path/to/data/bows/my-hall-bow/`. For the sake of explaining the next commands, we assume you ran it a second time, and created bags named `my-diff-bow`.
 
 ### `train-artm` command
 
