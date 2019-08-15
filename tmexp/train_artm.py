@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 import logging
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 import warnings
 
 from artm import (
@@ -21,8 +21,10 @@ from .cli import CLIBuilder, register_command
 from .io_constants import (
     BOW_DIR,
     DOCTOPIC_FILENAME,
+    DOCWORD_CONCAT_FILENAME,
     DOCWORD_FILENAME,
     TOPICS_DIR,
+    VOCAB_CONCAT_FILENAME,
     VOCAB_FILENAME,
     WORDTOPIC_FILENAME,
 )
@@ -43,6 +45,7 @@ def _define_parser(parser: ArgumentParser) -> None:
     cli_builder.add_bow_arg(required=True)
     cli_builder.add_experiment_arg(required=False)
     cli_builder.add_force_arg()
+    cli_builder.add_consolidate_arg()
     parser.add_argument(
         "--batch-size",
         help="Number of documents to be stored in each batch, defaults to %(default)s.",
@@ -145,6 +148,34 @@ def _define_parser(parser: ArgumentParser) -> None:
     )
 
 
+def create_artm_batch_vectorizer(
+    collection_name: str,
+    input_dir: str,
+    batch_size: int,
+    input_path: str,
+    logger: logging.Logger,
+) -> Tuple[BatchVectorizer, int]:
+    batch_vectorizer = BatchVectorizer(
+        collection_name=collection_name,
+        data_path=input_dir,
+        data_format="bow_uci",
+        batch_size=batch_size,
+    )
+    with open(input_path, "r", encoding="utf-8") as fin:
+        num_docs = int(fin.readline())
+        logger.info("\tNumber of documents: %d", num_docs)
+        num_words = int(fin.readline())
+        logger.info("\tNumber of words: %d", num_words)
+        num_rows = int(fin.readline())
+        logger.info("\tNumber of document/word pairs: %d", num_rows)
+    logger.info(
+        "\tCreated vectorizer contains %d batches of up to %d documents.",
+        batch_vectorizer.num_batches,
+        batch_size,
+    )
+    return batch_vectorizer, num_docs
+
+
 def print_scores(
     logger: logging.Logger, num_iter: int, scores: Dict[str, float]
 ) -> None:
@@ -213,6 +244,7 @@ def train_artm(
     min_docs_abs: Optional[int],
     min_docs_rel: Optional[float],
     quiet: bool,
+    consolidate: bool,
     log_level: str,
 ) -> None:
     """Train ARTM model from the input BoW."""
@@ -222,6 +254,10 @@ def train_artm(
     check_file_exists(os.path.join(input_dir, VOCAB_FILENAME))
     docword_input_path = os.path.join(input_dir, DOCWORD_FILENAME)
     check_file_exists(docword_input_path)
+    if consolidate:
+        check_file_exists(os.path.join(input_dir, VOCAB_CONCAT_FILENAME))
+        docword_concat_input_path = os.path.join(input_dir, DOCWORD_CONCAT_FILENAME)
+        check_file_exists(docword_concat_input_path)
 
     output_dir = os.path.join(TOPICS_DIR, bow_name, exp_name)
     doctopic_output_path = os.path.join(output_dir, DOCTOPIC_FILENAME)
@@ -230,27 +266,17 @@ def train_artm(
     check_remove(wordtopic_output_path, logger, force)
     create_directory(output_dir, logger)
 
-    logger.info("Loading bags of words ...")
-
-    batch_vectorizer = BatchVectorizer(
-        collection_name="bow_tm",
-        data_path=input_dir,
-        data_format="bow_uci",
-        batch_size=batch_size,
+    logger.info("Creating batch vectorizer from bags of words ...")
+    batch_vectorizer, num_docs = create_artm_batch_vectorizer(
+        "bow_tm", input_dir, batch_size, docword_input_path, logger
     )
-    with open(docword_input_path, "r", encoding="utf-8") as fin:
-        num_docs = int(fin.readline())
-        logger.info("Number of documents: %d", num_docs)
-        num_words = int(fin.readline())
-        logger.info("Number of words: %d", num_words)
-        num_rows = int(fin.readline())
-        logger.info("Number of document/word pairs: %d", num_rows)
-
-    logger.info(
-        "Loaded bags of words, created %d batches of up to %d documents.",
-        batch_vectorizer.num_batches,
-        batch_size,
-    )
+    if consolidate:
+        logger.info("Creating batch vectorizer from consolidated  bags of words ...")
+        batch_vectorizer_train, num_docs = create_artm_batch_vectorizer(
+            "bow_concat_tm", input_dir, batch_size, docword_concat_input_path, logger
+        )
+    else:
+        batch_vectorizer_train = batch_vectorizer
 
     if min_docs_rel is None:
         min_docs = min_docs_abs
@@ -262,11 +288,13 @@ def train_artm(
         cache_theta=True,
         reuse_theta=True,
         theta_name="theta",
-        dictionary=batch_vectorizer.dictionary,
+        dictionary=batch_vectorizer_train.dictionary,
         num_document_passes=1,
         num_topics=max_topic,
         scores=[
-            PerplexityScore(name="Perplexity", dictionary=batch_vectorizer.dictionary),
+            PerplexityScore(
+                name="Perplexity", dictionary=batch_vectorizer_train.dictionary
+            ),
             SparsityPhiScore(name="Topic Sparsity", eps=wordtopic_eps),
             SparsityThetaScore(name="Doc Sparsity", eps=doctopic_eps),
         ],
@@ -282,7 +310,7 @@ def train_artm(
     logger.info("Decorrelating topics ...")
     model_artm = loop_until_convergence(
         logger,
-        batch_vectorizer,
+        batch_vectorizer_train,
         model_artm,
         converge_metric,
         converge_thresh,
@@ -297,7 +325,7 @@ def train_artm(
     model_artm.regularizers["Selector"].tau = select_coeff
     model_artm = loop_until_convergence(
         logger,
-        batch_vectorizer,
+        batch_vectorizer_train,
         model_artm,
         converge_metric,
         converge_thresh,
@@ -328,7 +356,7 @@ def train_artm(
     model_artm.regularizers["Sparse Doc"].tau = -sparse_doc_coeff
     model_artm = loop_until_convergence(
         logger,
-        batch_vectorizer,
+        batch_vectorizer_train,
         model_artm,
         converge_metric,
         converge_thresh,
@@ -337,7 +365,8 @@ def train_artm(
     )
 
     logger.info("Finished training.")
-    doctopic, _, _ = model_artm.get_phi_dense(model_name="theta")
+
+    doctopic = model_artm.transform_sparse(batch_vectorizer)[0].todense().T
     logger.info("Saving topics per document ...")
     np.save(doctopic_output_path, doctopic)
     logger.info("Saved topics per document in '%s'.", doctopic_output_path)
