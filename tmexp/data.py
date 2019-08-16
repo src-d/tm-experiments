@@ -179,3 +179,38 @@ class RepoMapping(DefaultDict[str, FileMapping]):
             logger.info("\tExtracted %d documents.", new_num_docs)
         num_docs = cur_doc_ind + 1
         return new_corpus[:num_docs]
+
+
+# ------------------------------------------------------------------
+
+
+class DocWordCounts(Dict[str, int]):
+    pass
+
+
+class RefWordCounts(DefaultDict[str, DocWordCounts]):
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.default_factory = DocWordCounts  # type: ignore
+
+
+class RepoWordCounts(DefaultDict[str, RefWordCounts]):
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.default_factory = RefWordCounts  # type: ignore
+
+
+class DocMembership(Dict[str, np.array]):
+    pass
+
+
+class RefMembership(DefaultDict[str, DocMembership]):
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.default_factory = DocMembership  # type: ignore
+
+
+class RepoMembership(DefaultDict[str, RefMembership]):
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.default_factory = RefMembership  # type: ignore
