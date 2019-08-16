@@ -1,6 +1,4 @@
-from typing import Any, Callable, Counter, DefaultDict, Dict, List, NamedTuple, Set
-
-import numpy as np
+from typing import Any, Counter, DefaultDict, Dict, List, NamedTuple, Set
 
 
 class FileInfo(NamedTuple):
@@ -112,6 +110,3 @@ class RepoMapping(DefaultDict[str, FileMapping]):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self.default_factory = FileMapping  # type: ignore
-
-
-FileReducer = Callable[[np.ndarray, np.ndarray, RefList, RefMapping, int], int]

@@ -7,7 +7,7 @@ from typing import Counter as CounterType, DefaultDict, Dict, List
 import numpy as np
 
 from .cli import CLIBuilder, register_command
-from .create_bow import DIFF_MODEL, HALL_MODEL, SEP
+from .constants import DIFF_MODEL, HALL_MODEL, SEP
 from .io_constants import (
     BOW_DIR,
     DOC_FILENAME,

@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Set
 import tqdm
 
 from .cli import CLIBuilder, register_command
+from .constants import ADD, DEL, DIFF_MODEL, HALL_MODEL, SEP
 from .data import Dataset, DocumentEvolution, EvolutionModel, RefList, WordCount
 from .io_constants import (
     BOW_DIR,
@@ -25,12 +26,6 @@ from .utils import (
     create_language_list,
     create_logger,
 )
-
-DIFF_MODEL = "diff"
-HALL_MODEL = "hall"
-SEP = ":"
-ADD = "added"
-DEL = "removed"
 
 
 def _define_parser(parser: ArgumentParser) -> None:

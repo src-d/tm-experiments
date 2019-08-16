@@ -1,0 +1,6 @@
+DIFF_MODEL = "diff"
+HALL_MODEL = "hall"
+SEP = ":"
+ADD = "added"
+DEL = "removed"
+DOC = "doc"
