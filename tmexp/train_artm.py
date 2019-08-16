@@ -8,11 +8,9 @@ from artm import (
     ARTM,
     BatchVectorizer,
     DecorrelatorPhiRegularizer,
-    PerplexityScore,
     SmoothSparsePhiRegularizer,
     SmoothSparseThetaRegularizer,
     SparsityPhiScore,
-    SparsityThetaScore,
     TopicSelectionThetaRegularizer,
 )
 import numpy as np
@@ -64,12 +62,6 @@ def _define_parser(parser: ArgumentParser) -> None:
         "we assume convergence, defaults to %(default)s.",
         default=0.001,
         type=float,
-    )
-    parser.add_argument(
-        "--converge-metric",
-        help="Selection metric to use.",
-        choices=["perplexity", "distinctness"],
-        default="distinctness",
     )
     parser.add_argument(
         "--max-iter",
@@ -148,6 +140,13 @@ def _define_parser(parser: ArgumentParser) -> None:
     )
 
 
+def check_doctopic(logger: logging.Logger, doctopic: np.ndarray, num_docs: int) -> bool:
+    if num_docs != doctopic.shape[0]:
+        logger.debug("Missing %d documents in matrix.", num_docs - doctopic.shape[0])
+        return False
+    return True
+
+
 def create_artm_batch_vectorizer(
     collection_name: str,
     input_dir: str,
@@ -169,26 +168,31 @@ def create_artm_batch_vectorizer(
         num_rows = int(fin.readline())
         logger.info("\tNumber of document/word pairs: %d", num_rows)
     logger.info(
-        "\tCreated vectorizer contains %d batches of up to %d documents.",
+        "Created vectorizer contains %d batches of up to %d documents.\n",
         batch_vectorizer.num_batches,
         batch_size,
     )
     return batch_vectorizer, num_docs
 
 
-def print_scores(
-    logger: logging.Logger, num_iter: int, scores: Dict[str, float]
-) -> None:
-    logger.info("\tIteration %d", num_iter)
+def print_scores(logger: logging.Logger, scores: Dict[str, float], header: str) -> None:
+    msg = "%s\n" % header
+    num_tab = 1 + int("\t" in header)
     for label, score in scores.items():
-        logger.info("\t\t%s : %.4f", label, score)
+        msg += "%s%s : %.4f\n" % (num_tab * "\t", label, score)
+    logger.info(msg)
 
 
-def compute_scores(model: ARTM) -> Dict[str, float]:
+def compute_scores(
+    model: ARTM, batch_vectorizer: BatchVectorizer, doctopic_eps: float
+) -> Dict[str, float]:
     scores: Dict[str, float] = {}
-    for label in ["Topic Sparsity", "Doc Sparsity", "Perplexity"]:
-        scores[label.lower()] = model.score_tracker[label].last_value
+    scores["topic sparsity"] = model.score_tracker["topic sparsity"].last_value
     wordtopic, words, topics = model.get_phi_dense()
+    doctopic = model.transform_sparse(batch_vectorizer)[0].todense().T
+    scores["doc sparsity"] = np.sum(doctopic < doctopic_eps) / (
+        doctopic.shape[0] * doctopic.shape[1]
+    )
     scores["distinctness"] = np.mean(
         np.sum(compute_distinctness(wordtopic.T, len(topics), len(words)), axis=1)
         / (len(topics) - 1)
@@ -196,32 +200,66 @@ def compute_scores(model: ARTM) -> Dict[str, float]:
     return scores
 
 
-def loop_until_convergence(
+def _loop_until_convergence(
+    model: ARTM,
+    start_iter: int,
     logger: logging.Logger,
     batch_vectorizer: BatchVectorizer,
-    model_artm: ARTM,
-    converge_metric: str,
     converge_thresh: float,
     max_iter: int,
+    doctopic_eps: float,
     quiet: bool,
-) -> ARTM:
+) -> Tuple[ARTM, float, int]:
     converged = False
     num_iter = 0
     prev_score = np.inf
-    while not converged:
+    while not converged and num_iter < max_iter:
         num_iter += 1
-        model_artm.fit_offline(
+        model.fit_offline(
             batch_vectorizer=batch_vectorizer, num_collection_passes=1, reset_nwt=False
         )
-        scores = compute_scores(model_artm)
-        score = scores[converge_metric]
+        scores = compute_scores(model, batch_vectorizer, doctopic_eps)
+        score = scores["distinctness"]
         converged = abs(score - prev_score) / prev_score < converge_thresh
-        if converged or not quiet or num_iter == 1:
-            print_scores(logger, num_iter, scores)
+        if not quiet and not ((start_iter + num_iter) % 25):
+            print_scores(logger, scores, "\tIteration %d" % (start_iter + num_iter))
         prev_score = score
-        if num_iter > max_iter:
-            break
-    return model_artm
+    return model, score, start_iter + num_iter
+
+
+def _save_model(
+    model: ARTM,
+    logger: logging.Logger,
+    batch_vectorizer: BatchVectorizer,
+    num_docs: int,
+    batch_vectorizer_train: BatchVectorizer,
+    num_docs_train: int,
+    doctopic_output_path: str,
+    wordtopic_output_path: str,
+    consolidate: bool,
+) -> None:
+    if consolidate:
+        check_doctopic(
+            logger,
+            model.transform_sparse(batch_vectorizer_train)[0].todense().T,
+            num_docs_train,
+        )
+    doctopic = model.transform_sparse(batch_vectorizer)[0].todense().T
+    if check_doctopic(logger, doctopic, num_docs):
+        if os.path.exists(doctopic_output_path):
+            logger.info("Removing previous document-topic matrix ...")
+            os.remove(doctopic_output_path)
+        if os.path.exists(wordtopic_output_path):
+            logger.info("Removing previous document-topic matrix ...")
+            os.remove(wordtopic_output_path)
+        logger.info("Saving topics per document ...")
+        np.save(doctopic_output_path, doctopic)
+        logger.info("Saved topics per document in '%s'.", doctopic_output_path)
+        logger.info("Saving word/topic distribution ...")
+        np.save(wordtopic_output_path, model.get_phi_dense()[0].T)
+        logger.info("Saved word/topic distribution in '%s'.\n", wordtopic_output_path)
+    else:
+        logger.info("Document-topic matrix is corrupted, no saving.\n")
 
 
 @register_command(parser_definer=_define_parser)
@@ -231,7 +269,6 @@ def train_artm(
     force: bool,
     batch_size: int,
     max_topic: int,
-    converge_metric: str,
     converge_thresh: float,
     max_iter: int,
     sparse_word_coeff: float,
@@ -272,17 +309,17 @@ def train_artm(
     )
     if consolidate:
         logger.info("Creating batch vectorizer from consolidated  bags of words ...")
-        batch_vectorizer_train, num_docs = create_artm_batch_vectorizer(
+        batch_vectorizer_train, num_docs_train = create_artm_batch_vectorizer(
             "bow_concat_tm", input_dir, batch_size, docword_concat_input_path, logger
         )
     else:
-        batch_vectorizer_train = batch_vectorizer
+        batch_vectorizer_train, num_docs_train = batch_vectorizer, num_docs
 
     if min_docs_rel is None:
         min_docs = min_docs_abs
     else:
         check_range(min_docs_rel, "min-docs-rel")
-        min_docs = int(num_docs * min_docs_rel)
+        min_docs = int(num_docs_train * min_docs_rel)
 
     model_artm = ARTM(
         cache_theta=True,
@@ -291,13 +328,7 @@ def train_artm(
         dictionary=batch_vectorizer_train.dictionary,
         num_document_passes=1,
         num_topics=max_topic,
-        scores=[
-            PerplexityScore(
-                name="Perplexity", dictionary=batch_vectorizer_train.dictionary
-            ),
-            SparsityPhiScore(name="Topic Sparsity", eps=wordtopic_eps),
-            SparsityThetaScore(name="Doc Sparsity", eps=doctopic_eps),
-        ],
+        scores=[SparsityPhiScore(name="topic sparsity", eps=wordtopic_eps)],
         regularizers=[
             SmoothSparsePhiRegularizer(name="Sparse Topic", tau=0),
             SmoothSparseThetaRegularizer(name="Sparse Doc", tau=0),
@@ -305,17 +336,45 @@ def train_artm(
             TopicSelectionThetaRegularizer(name="Selector", tau=0),
         ],
     )
+    num_iter = 0
+
+    def loop_until_convergence(model: ARTM, n_iter: int) -> Tuple[ARTM, float, int]:
+        return _loop_until_convergence(
+            model,
+            n_iter,
+            logger,
+            batch_vectorizer_train,
+            converge_thresh,
+            max_iter,
+            doctopic_eps,
+            quiet,
+        )
+
+    def save_model(model: ARTM) -> None:
+        _save_model(
+            model,
+            logger,
+            batch_vectorizer,
+            num_docs,
+            batch_vectorizer_train,
+            num_docs_train,
+            doctopic_output_path,
+            wordtopic_output_path,
+            consolidate,
+        )
+
     logger.info("Starting training ...")
 
     logger.info("Decorrelating topics ...")
-    model_artm = loop_until_convergence(
+    model_artm, _, num_iter = loop_until_convergence(model_artm, num_iter)
+    check_doctopic(
         logger,
-        batch_vectorizer_train,
-        model_artm,
-        converge_metric,
-        converge_thresh,
-        max_iter,
-        quiet,
+        model_artm.transform_sparse(batch_vectorizer_train)[0].todense().T,
+        num_docs_train,
+    )
+    logger.info("Finished first phase at iteration %d", num_iter)
+    print_scores(
+        logger, compute_scores(model_artm, batch_vectorizer, doctopic_eps), "Scores:"
     )
 
     logger.info("Applying selection regularization on topics ...")
@@ -323,14 +382,12 @@ def train_artm(
     model_artm.regularizers["Sparse Doc"].tau = 0
     model_artm.regularizers["Decorrelator"].tau = 0
     model_artm.regularizers["Selector"].tau = select_coeff
-    model_artm = loop_until_convergence(
+    model_artm, score_1, num_iter = loop_until_convergence(model_artm, num_iter)
+    logger.info("Finished second phase at iteration %d", num_iter)
+    print_scores(
         logger,
-        batch_vectorizer_train,
-        model_artm,
-        converge_metric,
-        converge_thresh,
-        max_iter,
-        quiet,
+        compute_scores(model_artm, batch_vectorizer, doctopic_eps),
+        "Scores before topic removal:",
     )
 
     logger.info(
@@ -338,39 +395,38 @@ def train_artm(
         min_docs,
         min_prob,
     )
-    doctopic, _, _ = model_artm.get_phi_dense(model_name="theta")
-    topics = np.argwhere(np.sum(doctopic > min_prob, axis=0) > min_docs).flatten()
-    topic_names = [t for i, t in enumerate(model_artm.topic_names) if i in topics]
-    model_artm.reshape(topic_names)
-    if len(topics):
+    doctopic = model_artm.transform_sparse(batch_vectorizer_train)[0].todense().T
+    valid_topics = np.sum(doctopic > min_prob, axis=0) > min_docs
+    topic_names = [
+        topic_name
+        for topic_ind, topic_name in enumerate(model_artm.topic_names)
+        if valid_topics[0, topic_ind]
+    ]
+    model_artm.reshape_topics(topic_names)
+    if len(valid_topics):
         logger.info("New number of topics: %d", len(topic_names))
     else:
         raise RuntimeError(
             "Removed all topics, please soften your selection criteria (aborting)."
         )
+    print_scores(
+        logger,
+        compute_scores(model_artm, batch_vectorizer, doctopic_eps),
+        "Scores after topic removal:",
+    )
+    save_model(model_artm)
 
     logger.info("Inducing sparsity ...")
     model_artm.regularizers["Selector"].tau = 0
     model_artm.regularizers["Decorrelator"].tau = decor_coeff
     model_artm.regularizers["Sparse Topic"].tau = -sparse_word_coeff
     model_artm.regularizers["Sparse Doc"].tau = -sparse_doc_coeff
-    model_artm = loop_until_convergence(
-        logger,
-        batch_vectorizer_train,
-        model_artm,
-        converge_metric,
-        converge_thresh,
-        max_iter,
-        quiet,
+    model_artm, score_2, num_iter = loop_until_convergence(model_artm, num_iter)
+    logger.info("Finished last phase of training at iteration %d", num_iter)
+    print_scores(
+        logger, compute_scores(model_artm, batch_vectorizer, doctopic_eps), "Scores:"
     )
-
-    logger.info("Finished training.")
-
-    doctopic = model_artm.transform_sparse(batch_vectorizer)[0].todense().T
-    logger.info("Saving topics per document ...")
-    np.save(doctopic_output_path, doctopic)
-    logger.info("Saved topics per document in '%s'.", doctopic_output_path)
-    wordtopic, _, _ = model_artm.get_phi_dense()
-    logger.info("Saving word/topic distribution ...")
-    np.save(wordtopic_output_path, wordtopic.T)
-    logger.info("Saved word/topic distribution in '%s'.", wordtopic_output_path)
+    if score_1 < score_2:
+        save_model(model_artm)
+    else:
+        logger.info("Sparsity worsened the model, no saving.")
