@@ -26,20 +26,30 @@ data
 │   ├── my-dataset-2.pkl
 │   └── my-merged-dataset.pkl
 ├── bows
-│   └── my-bow
+│   ├── my-hall-bow
+│   │   ├── doc.bow_tm.txt
+│   │   ├── docword.bow_tm.txt
+│   │   ├── refs.bow_tm.txt
+│   │   └── vocab.bow_tm.txt
+│   └── my-diff-bow
 │       ├── doc.bow_tm.txt
+│       ├── docword.bow_concat_tm.txt
 │       ├── docword.bow_tm.txt
 │       ├── refs.bow_tm.txt
-│       └── vocab.bow_tm.txt
+│       ├── vocab.bow_concat_tm.txt -> /data/bows/my-diff-bow/vocab.bow_tm.txt
+│       ├── vocab.bow_tm.txt
+│       └── wordcount.pkl
 └── topics
-    └── my-bow
-        ├── my-artm-exp
+    └── my-diff-bow
+        ├── my-hdp-exp
         │   ├── doctopic.npy
-        │   ├── wordtopic.npy
-        │   └── labels.txt
-        └── my-hdp-exp
+        │   └── wordtopic.npy
+        └── my-artm-exp
             ├── doctopic.npy
-            └── wordtopic.npy
+            ├── wordtopic.npy
+            ├── labels.txt
+            └── membership.pkl
+
 ```
 
 For each commands we only specify the required arguments, check the optional ones with `docker run --rm -i tmexp $CMD --help`.
@@ -74,7 +84,7 @@ This command will merge multiple dataset created by the previous command. Assumi
 
 ```
 docker run --rm -it -v /path/to/data:/data \ 
-  tmexp merge -i my-dataset my-dataset-2 -r repo --dataset-name my-merged-dataset
+  tmexp merge -i my-dataset my-dataset-2 --dataset-name my-merged-dataset
 ```
 
 Once this job is finished, the output file should be located in `/path/to/data/datasets/`.
@@ -91,10 +101,10 @@ You can launch the bag of words creation with the following command (don't forge
 
 ```
 docker run --rm -it -v /path/to/data:/data \
-  tmexp create-bow --topic-model hall --dataset-name my-dataset --bow-name my-bow
+  tmexp create-bow --topic-model hall --dataset-name my-dataset --bow-name my-hall-bow
 ```
 
-Once this job is finished, the output files should be located in `/path/to/data/bows/my-hall-bow/`. For the sake of explaining the next commands, we assume you ran it a second time, and created bags named `my-diff-bow`.
+Once this job is finished, the output files should be located in `/path/to/data/bows/my-hall-bow/`. For the sake of showing the additional output files, we assume you ran it a second time, and created bags named `my-diff-bow`.
 
 ### `train-artm` command
 
@@ -104,10 +114,10 @@ You can launch the training with the following command (don't forget to specify 
 
 ```
 docker run --rm -it -v /path/to/data:/data \
-  tmexp train-artm --bow-name my-bow --exp-name my-artm-exp --min-docs-abs 1
+  tmexp train-artm --bow-name my-diff-bow --exp-name my-artm-exp --min-docs-abs 1
 ```
 
-Once this job is finished, the output files should be located in `/path/to/data/topics/my-bow/my-artm-exp`.
+Once this job is finished, the output files should be located in `/path/to/data/topics/my-diff-bow/my-artm-exp`.
 
 ### `train-hdp`command
 
@@ -117,10 +127,10 @@ You can launch the training with the following command (don't forget to specify 
 
 ```
 docker run --rm -it -v /path/to/data:/data \
-  tmexp train-hdp --bow-name my-bow --exp-name my-hdp-exp
+  tmexp train-hdp --bow-name my-diff-bow --exp-name my-hdp-exp
 ```
 
-Once this job is finished, the output files should be located in `/path/to/data/topics/my-bow/my-hdp-exp`.
+Once this job is finished, the output files should be located in `/path/to/data/topics/my-diff-bow/my-hdp-exp`.
 
 ### `label` command
 
@@ -136,7 +146,18 @@ You can launch the labeling with the following command (don't forget to specify 
 
 ```
 docker run --rm -it -v /path/to/data:/data \
-  tmexp label --bow-name my-bow --exp-name my-artm-exp --context hall
+  tmexp label --bow-name my-diff-bow --exp-name my-artm-exp --context hall
 ```
 
-Once this job is finished, the output file should be located in `/path/to/data/topics/my-bow/my-artm-exp`.
+Once this job is finished, the output file should be located in `/path/to/data/topics/my-diff-bow/my-artm-exp`.
+
+### `postprocess` command
+
+This command will convert the corpus to the hall model if needed, then compute the total word count and topic assignment for each document, inputs that are needed to compute some of the metrics evaluating the quality of the topic model. You can launch the postprocessing with the following command:
+
+```
+docker run --rm -it -v /path/to/data:/data \
+  tmexp postprocess --bow-name my-diff-bow --exp-name my-artm-exp
+```
+
+Once this job is finished, the total word count output file should be located in ``/path/to/data/bows/my-diff-bow/` and the topic membership output file should be located in `/path/to/data/topics/my-diff-bow/my-artm-exp`.
