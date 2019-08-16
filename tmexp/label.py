@@ -10,7 +10,7 @@ import numpy as np
 
 from .cli import CLIBuilder, register_command
 from .constants import DIFF_MODEL, SEP
-from .data import RefList, RepoMapping
+from .data import FileReducer, RefList, RepoMapping
 from .io_constants import (
     BOW_DIR,
     DOC_FILENAME,
@@ -24,12 +24,10 @@ from .io_constants import (
 from .reduce import (
     concat_reducer,
     diff_to_hall_reducer,
-    FileReducer,
     last_ref_reducer,
     max_reducer,
     mean_reducer,
     median_reducer,
-    reduce_corpus,
 )
 from .utils import check_file_exists, check_range, check_remove, create_logger
 
@@ -162,13 +160,13 @@ def label(
     corpus = repo_mapping.create_corpus(logger, docword_input_path)
     if repo_mapping.topic_model == DIFF_MODEL:
         logger.info("Recreating hall model corpus (we can't use delta-documents) ...")
-        corpus = reduce_corpus(corpus, logger, repo_mapping, refs, diff_to_hall_reducer)
+        corpus = repo_mapping.reduce_corpus(corpus, logger, refs, diff_to_hall_reducer)
         num_docs = corpus.shape[0]
         logger.info("Recreated hall model corpus, found %d documents ...", num_docs)
 
     if context.reducer is not None:
         logger.info("Creating %s context ...", str(context))
-        corpus = reduce_corpus(corpus, logger, repo_mapping, refs, context.reducer)
+        corpus = repo_mapping.reduce_corpus(corpus, logger, refs, context.reducer)
         num_docs = corpus.shape[0]
         logger.info("Created context, found %d documents ...", num_docs)
 

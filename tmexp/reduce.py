@@ -1,35 +1,9 @@
-import logging
-from typing import Callable, DefaultDict
+from typing import Callable
 
 import numpy as np
 
 from .constants import ADD, DEL, DOC
-from .data import RefList, RefMapping, RepoMapping
-
-FileReducer = Callable[[np.ndarray, np.ndarray, RefList, RefMapping, int], int]
-
-
-def reduce_corpus(
-    corpus: np.ndarray,
-    logger: logging.Logger,
-    repo_mapping: RepoMapping,
-    refs: DefaultDict[str, RefList],
-    file_reducer: FileReducer,
-) -> np.ndarray:
-    new_corpus = np.zeros_like(corpus)
-    cur_doc_ind = -1
-    for repo, file_mapping in repo_mapping.items():
-        logger.info("\tProcessing repository '%s'", repo)
-        new_num_docs = 0
-        for ref_mapping in file_mapping.values():
-            num_added_docs = file_reducer(
-                corpus, new_corpus, refs[repo], ref_mapping, cur_doc_ind
-            )
-            new_num_docs += num_added_docs
-            cur_doc_ind += num_added_docs
-        logger.info("\tExtracted %d documents.", new_num_docs)
-    num_docs = cur_doc_ind + 1
-    return new_corpus[:num_docs]
+from .data import RefList, RefMapping
 
 
 def diff_to_hall_reducer(

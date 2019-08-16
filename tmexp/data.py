@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Counter, DefaultDict, Dict, List, NamedTuple, Set
+from typing import Any, Callable, Counter, DefaultDict, Dict, List, NamedTuple, Set
 
 import numpy as np
 
@@ -111,6 +111,9 @@ class FileMapping(DefaultDict[str, RefMapping]):
         self.default_factory = RefMapping  # type: ignore
 
 
+FileReducer = Callable[[np.ndarray, np.ndarray, RefList, RefMapping, int], int]
+
+
 class RepoMapping(DefaultDict[str, FileMapping]):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
@@ -148,3 +151,25 @@ class RepoMapping(DefaultDict[str, FileMapping]):
                 corpus[doc_id, word_id - 1] = count
         logger.info("Loaded %d bags of words.", num_docs)
         return corpus
+
+    def reduce_corpus(
+        self,
+        corpus: np.ndarray,
+        logger: logging.Logger,
+        refs: DefaultDict[str, RefList],
+        file_reducer: FileReducer,
+    ) -> np.ndarray:
+        new_corpus = np.zeros_like(corpus)
+        cur_doc_ind = -1
+        for repo, file_mapping in self.items():
+            logger.info("\tProcessing repository '%s'", repo)
+            new_num_docs = 0
+            for ref_mapping in file_mapping.values():
+                num_added_docs = file_reducer(
+                    corpus, new_corpus, refs[repo], ref_mapping, cur_doc_ind
+                )
+                new_num_docs += num_added_docs
+                cur_doc_ind += num_added_docs
+            logger.info("\tExtracted %d documents.", new_num_docs)
+        num_docs = cur_doc_ind + 1
+        return new_corpus[:num_docs]
