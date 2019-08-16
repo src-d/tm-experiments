@@ -9,7 +9,7 @@ from typing import DefaultDict, Dict, List, Optional, Union
 import numpy as np
 
 from .cli import CLIBuilder, register_command
-from .constants import ADD, DEL, DIFF_MODEL, DOC, HALL_MODEL, SEP
+from .constants import DIFF_MODEL, SEP
 from .data import RefList, RepoMapping
 from .io_constants import (
     BOW_DIR,
@@ -149,38 +149,18 @@ def label(
     for repo, repo_refs in refs.items():
         logger.info("\tRepository '%s': %d refs", repo, len(repo_refs))
 
-    logger.info("Loading document index ...")
-    with open(doc_input_path, "r", encoding="utf-8") as fin:
-        line = fin.readline()
-        if SEP + ADD in line or SEP + DEL in line:
-            topic_model = DIFF_MODEL
-        else:
-            topic_model = HALL_MODEL
-        fin.seek(0)
-        repo_mapping = RepoMapping()
-        for doc_ind, line in enumerate(fin):
-            doc_info = line.split()
-            if topic_model == HALL_MODEL:
-                repo, file_path, _ = doc_info[0].split(SEP)
-                delta_type = DOC
-            else:
-                repo, file_path, delta_type, _ = doc_info[0].split(SEP)
-            for ref in doc_info[1:]:
-                repo_mapping[repo][file_path][ref][delta_type] = doc_ind
-    logger.info("Loaded document index, detected %s topic model.", topic_model)
+    logger.info("Loading word index ...")
+    with open(vocab_input_path, "r", encoding="utf-8") as fin:
+        word_index: Dict[int, str] = {
+            i: word.replace("\n", "") for i, word in enumerate(fin)
+        }
+    num_words = len(word_index)
+    logger.info("Loaded word index, found %d words.", num_words)
 
-    logger.info("Loading bags of words ...")
-    with open(docword_input_path, "r", encoding="utf-8") as fin:
-        num_docs = int(fin.readline())
-        num_words = int(fin.readline())
-        fin.readline()
-        corpus = np.zeros((num_docs, num_words))
-        for line in fin:
-            doc_id, word_id, count = map(int, line.split())
-            corpus[doc_id, word_id - 1] = count
-    logger.info("Loaded %d bags of words.", num_docs)
-
-    if topic_model == DIFF_MODEL:
+    repo_mapping = RepoMapping()
+    repo_mapping.build(logger, doc_input_path)
+    corpus = repo_mapping.create_corpus(logger, docword_input_path)
+    if repo_mapping.topic_model == DIFF_MODEL:
         logger.info("Recreating hall model corpus (we can't use delta-documents) ...")
         corpus = reduce_corpus(corpus, logger, repo_mapping, refs, diff_to_hall_reducer)
         num_docs = corpus.shape[0]
@@ -191,13 +171,6 @@ def label(
         corpus = reduce_corpus(corpus, logger, repo_mapping, refs, context.reducer)
         num_docs = corpus.shape[0]
         logger.info("Created context, found %d documents ...", num_docs)
-
-    logger.info("Loading word index ...")
-    with open(vocab_input_path, "r", encoding="utf-8") as fin:
-        word_index: Dict[int, str] = {
-            i: word.replace("\n", "") for i, word in enumerate(fin)
-        }
-    logger.info("Loaded word index, found %d words.", num_words)
 
     logger.info("Loading word topic distributions ...")
     topic_words = np.load(wordtopic_input_path)

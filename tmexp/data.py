@@ -1,4 +1,9 @@
+import logging
 from typing import Any, Counter, DefaultDict, Dict, List, NamedTuple, Set
+
+import numpy as np
+
+from .constants import ADD, DEL, DIFF_MODEL, DOC, HALL_MODEL, SEP
 
 
 class FileInfo(NamedTuple):
@@ -110,3 +115,36 @@ class RepoMapping(DefaultDict[str, FileMapping]):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self.default_factory = FileMapping  # type: ignore
+
+    def build(self, logger: logging.Logger, input_path: str) -> None:
+        logger.info("Loading document index ...")
+        with open(input_path, "r", encoding="utf-8") as fin:
+            line = fin.readline()
+            if SEP + ADD in line or SEP + DEL in line:
+                self.topic_model = DIFF_MODEL
+            else:
+                self.topic_model = HALL_MODEL
+            fin.seek(0)
+            for doc_ind, line in enumerate(fin):
+                doc_info = line.split()
+                if self.topic_model == HALL_MODEL:
+                    repo, file_path, _ = doc_info[0].split(SEP)
+                    delta_type = DOC
+                else:
+                    repo, file_path, delta_type, _ = doc_info[0].split(SEP)
+                for ref in doc_info[1:]:
+                    self[repo][file_path][ref][delta_type] = doc_ind
+        logger.info("Loaded document index, detected %s topic model.", self.topic_model)
+
+    def create_corpus(self, logger: logging.Logger, input_path: str) -> np.ndarray:
+        logger.info("Loading bags of words ...")
+        with open(input_path, "r", encoding="utf-8") as fin:
+            num_docs = int(fin.readline())
+            num_words = int(fin.readline())
+            fin.readline()
+            corpus = np.zeros((num_docs, num_words))
+            for line in fin:
+                doc_id, word_id, count = map(int, line.split())
+                corpus[doc_id, word_id - 1] = count
+        logger.info("Loaded %d bags of words.", num_docs)
+        return corpus
