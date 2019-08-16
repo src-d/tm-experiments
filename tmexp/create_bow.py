@@ -119,7 +119,7 @@ def create_bow(
                 doc_freq.update(bow.keys())
             doc_evolution = DocumentEvolution(bows=[], refs=[])
             seen_blobs: Set[str] = set()
-            refs = input_dataset.refs[repo]
+            refs = input_dataset.refs_dict[repo]
             prev_bow = None
             for ref in refs:
                 file_info = input_dataset.files_info[repo][ref].get(file_path)
@@ -193,8 +193,8 @@ def create_bow(
 
     logger.info("Saving tagged refs ...")
     with open(refs_output_path, "w", encoding="utf-8") as fout:
-        for repo, repo_refs in input_dataset.refs.items():
-            for ref in repo_refs:
+        for repo, refs in input_dataset.refs_dict.items():
+            for ref in refs:
                 fout.write("%s%s%s\n" % (repo, SEP, ref))
     logger.info("Saved tagged refs in '%s'" % refs_output_path)
 

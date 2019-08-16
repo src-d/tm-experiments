@@ -4,13 +4,13 @@ from enum import Enum
 from functools import partial
 import itertools
 import os
-from typing import DefaultDict, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 
 from .cli import CLIBuilder, register_command
-from .constants import DIFF_MODEL, SEP
-from .data import FileReducer, RefList, RepoMapping
+from .constants import DIFF_MODEL
+from .data import FileReducer, RepoMapping
 from .io_constants import (
     BOW_DIR,
     DOC_FILENAME,
@@ -29,7 +29,13 @@ from .reduce import (
     mean_reducer,
     median_reducer,
 )
-from .utils import check_file_exists, check_range, check_remove, create_logger
+from .utils import (
+    check_file_exists,
+    check_range,
+    check_remove,
+    create_logger,
+    load_refs_dict,
+)
 
 
 def _define_parser(parser: ArgumentParser) -> None:
@@ -137,15 +143,7 @@ def label(
 
     check_range(min_prob, "min-prob")
 
-    logger.info("Loading tagged refs ...")
-    with open(refs_input_path, "r", encoding="utf-8") as fin:
-        refs: DefaultDict[str, RefList] = defaultdict(RefList)
-        for line in fin:
-            repo, ref = line.split(SEP)
-            refs[repo].append(ref.replace("\n", ""))
-    logger.info("Loaded tagged refs:")
-    for repo, repo_refs in refs.items():
-        logger.info("\tRepository '%s': %d refs", repo, len(repo_refs))
+    refs_dict = load_refs_dict(logger, refs_input_path)
 
     logger.info("Loading word index ...")
     with open(vocab_input_path, "r", encoding="utf-8") as fin:
@@ -160,13 +158,15 @@ def label(
     corpus = repo_mapping.create_corpus(logger, docword_input_path)
     if repo_mapping.topic_model == DIFF_MODEL:
         logger.info("Recreating hall model corpus (we can't use delta-documents) ...")
-        corpus = repo_mapping.reduce_corpus(corpus, logger, refs, diff_to_hall_reducer)
+        corpus = repo_mapping.reduce_corpus(
+            corpus, logger, refs_dict, diff_to_hall_reducer
+        )
         num_docs = corpus.shape[0]
         logger.info("Recreated hall model corpus, found %d documents ...", num_docs)
 
     if context.reducer is not None:
         logger.info("Creating %s context ...", str(context))
-        corpus = repo_mapping.reduce_corpus(corpus, logger, refs, context.reducer)
+        corpus = repo_mapping.reduce_corpus(corpus, logger, refs_dict, context.reducer)
         num_docs = corpus.shape[0]
         logger.info("Created context, found %d documents ...", num_docs)
 

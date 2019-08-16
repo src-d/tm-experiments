@@ -33,6 +33,7 @@ from .data import (
     FilesContent,
     FilesInfo,
     RefList,
+    RefsDict,
     WordCount,
 )
 from .gitbase_queries import (
@@ -202,31 +203,31 @@ def preprocess(
     logger.info("Processing repository '%s'" % repo)
     logger.info("Retrieving tagged references ...")
     sql = get_tagged_refs_sql(repository_id=repo)
-    refs_dict: DefaultDict[int, DefaultDict[int, RefList]] = defaultdict(
+    version_mapping: DefaultDict[int, DefaultDict[int, RefList]] = defaultdict(
         lambda: defaultdict(RefList)
     )
     if only_head:
-        refs = ["HEAD"]
+        refs = RefList(["HEAD"])
         logger.info("Only extracting HEAD revision.")
     else:
-        refs = [
+        refs = RefList(
             row["ref_name"].decode() for row in extract(host, port, user, password, sql)
-        ]
+        )
         for keyword in exclude_refs:
-            refs = [ref for ref in refs if keyword not in ref]
+            refs = RefList(ref for ref in refs if keyword not in ref)
         if not only_by_date:
             for ref in refs:
                 major, minor = [
                     int(re.findall(r"[0-9]+", version)[0])
                     for version in ref.split(version_sep)[:2]
                 ]
-                refs_dict[major][minor].append(ref)
-            refs = [
+                version_mapping[major][minor].append(ref)
+            refs = RefList(
                 ref
-                for major in sorted(refs_dict)
-                for minor in sorted(refs_dict[major])
-                for ref in refs_dict[major][minor]
-            ]
+                for major in sorted(version_mapping)
+                for minor in sorted(version_mapping[major])
+                for ref in version_mapping[major][minor]
+            )
         logger.info("Found %d tagged references." % len(refs))
 
     used_langs = create_language_list(langs, exclude_langs)
@@ -374,10 +375,12 @@ def preprocess(
     logger.info("Reversing stemming ...")
     files_content.map_words(reverse_mapping)
 
+    refs_dict = RefsDict()
+    refs_dict[repo] = refs
     dataset = Dataset(
         files_info={repo: files_info},
         files_content={repo: files_content},
-        refs={repo: refs},
+        refs_dict=refs_dict,
     )
     logger.info("Saving features ...")
     with open(output_path, "wb") as fout:

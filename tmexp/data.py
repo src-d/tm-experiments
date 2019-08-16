@@ -6,6 +6,16 @@ import numpy as np
 from .constants import ADD, DEL, DIFF_MODEL, DOC, HALL_MODEL, SEP
 
 
+class RefList(List[str]):
+    pass
+
+
+class RefsDict(DefaultDict[str, RefList]):
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.default_factory = RefList  # type: ignore
+
+
 class FileInfo(NamedTuple):
     blob_hash: str
     language: str
@@ -16,7 +26,7 @@ class RefInfo(Dict[str, FileInfo]):
 
 
 class FilesInfo(Dict[str, RefInfo]):
-    def __init__(self, refs: List[str]):
+    def __init__(self, refs: RefList):
         super().__init__()
         for ref in refs:
             self[ref] = RefInfo()
@@ -73,14 +83,10 @@ class FilesContent(Dict[str, BlobContent]):
 class Dataset(NamedTuple):
     files_info: Dict[str, FilesInfo] = {}
     files_content: Dict[str, FilesContent] = {}
-    refs: Dict[str, List[str]] = {}
+    refs_dict: RefsDict = RefsDict()
 
 
 # ------------------------------------------------------------------
-
-
-class RefList(List[str]):
-    pass
 
 
 class DocumentEvolution(NamedTuple):
@@ -156,7 +162,7 @@ class RepoMapping(DefaultDict[str, FileMapping]):
         self,
         corpus: np.ndarray,
         logger: logging.Logger,
-        refs: DefaultDict[str, RefList],
+        refs_dict: RefsDict,
         file_reducer: FileReducer,
     ) -> np.ndarray:
         new_corpus = np.zeros_like(corpus)
@@ -166,7 +172,7 @@ class RepoMapping(DefaultDict[str, FileMapping]):
             new_num_docs = 0
             for ref_mapping in file_mapping.values():
                 num_added_docs = file_reducer(
-                    corpus, new_corpus, refs[repo], ref_mapping, cur_doc_ind
+                    corpus, new_corpus, refs_dict[repo], ref_mapping, cur_doc_ind
                 )
                 new_num_docs += num_added_docs
                 cur_doc_ind += num_added_docs

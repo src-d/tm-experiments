@@ -13,6 +13,9 @@ from typing import (
 
 import tqdm
 
+from .constants import SEP
+from .data import RefsDict
+
 # TODO: stop hardcoding when https://github.com/bblfsh/client-python/issues/168 is done
 SUPPORTED_LANGUAGES = [
     "C#",
@@ -149,3 +152,16 @@ def recursive_update(d: MutableMappingType, u: MappingType) -> None:
         return d
 
     recursive_worker(d, u)
+
+
+def load_refs_dict(logger: logging.Logger, input_path: str) -> RefsDict:
+    logger.info("Loading tagged refs ...")
+    with open(input_path, "r", encoding="utf-8") as fin:
+        refs_dict = RefsDict()
+        for line in fin:
+            repo, ref = line.split(SEP)
+            refs_dict[repo].append(ref.replace("\n", ""))
+    logger.info("Loaded tagged refs:")
+    for repo, refs in refs_dict.items():
+        logger.info("\tRepository '%s': %d refs", repo, len(refs))
+    return refs_dict

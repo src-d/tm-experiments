@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from collections import Counter, defaultdict
 import os
 import pickle
-from typing import Counter as CounterType, DefaultDict, Dict, List
+from typing import Counter as CounterType, DefaultDict, Dict
 
 import numpy as np
 
@@ -18,7 +18,7 @@ from .io_constants import (
     TOPICS_DIR,
     WORDCOUNT_FILENAME,
 )
-from .utils import check_file_exists, check_remove, create_logger
+from .utils import check_file_exists, check_remove, create_logger, load_refs_dict
 
 
 def _define_parser(parser: ArgumentParser) -> None:
@@ -50,16 +50,7 @@ def postprocess(bow_name: str, exp_name: str, force: bool, log_level: str) -> No
     wordcount_output_path = os.path.join(dir_exp, WORDCOUNT_FILENAME)
     check_remove(wordcount_output_path, logger, force)
 
-    logger.info("Loading tagged refs ...")
-    with open(refs_input_path, "r", encoding="utf-8") as fin:
-        refs: DefaultDict[str, List[str]] = defaultdict(list)
-        for line in fin:
-            repo, ref = line.split(SEP)
-            refs[repo].append(ref)
-    logger.info(
-        "Loaded tagged refs, found %d."
-        % sum(len(repo_refs) for repo_refs in refs.values())
-    )
+    refs_dict = load_refs_dict(logger, refs_input_path)
 
     logger.info("Loading document topics matrix ...")
     doctopic = np.load(doctopic_input_path)
@@ -117,12 +108,12 @@ def postprocess(bow_name: str, exp_name: str, force: bool, log_level: str) -> No
                 wordcount[doc_repo][ref][doc_path] = docword[ind_doc]
     if topic_model == DIFF_MODEL:
 
-        for repo, repo_refs in refs.items():
+        for repo, refs in refs_dict.items():
             last_membership: DefaultDict[str, np.array] = defaultdict(
                 lambda: np.zeros(num_topics)
             )
             last_wordcount: CounterType[str] = Counter()
-            for ref in repo_refs:
+            for ref in refs:
                 for doc_path, doc_mapping in diff_mapping[repo][ref].items():
                     last = last_membership[doc_path]
                     last_wc = last_wordcount[doc_path]
