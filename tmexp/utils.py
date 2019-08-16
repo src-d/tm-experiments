@@ -1,6 +1,6 @@
 from collections.abc import Mapping, MutableMapping
 import logging
-from logging import Handler, Logger, LogRecord, NOTSET
+from logging import Formatter, Handler, Logger, LogRecord, NOTSET
 import os
 import shutil
 import time
@@ -41,6 +41,7 @@ CUR_TIME = None
 class TqdmLoggingHandler(Handler):
     def __init__(self, level: int = NOTSET) -> None:
         super().__init__(level)
+        self.formatter = Formatter("[%(levelname)s] %(message)s")
 
     def emit(self, record: LogRecord) -> None:
         try:

@@ -195,8 +195,8 @@ def concat_reducer(
     ref_mapping: RefMapping,
     cur_doc_ind: int,
 ) -> int:
-    prev_doc = np.zeros(corpus[0])
-    empty_doc = np.zeros(corpus[0])
+    prev_doc = np.zeros_like(corpus[0])
+    empty_doc = np.zeros_like(corpus[0])
     for ref in refs:
         if ref not in ref_mapping or DOC not in ref_mapping[ref]:
             continue
