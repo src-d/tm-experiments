@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Set
 import tqdm
 
 from .cli import CLIBuilder, register_command
+from .constants import ADD, DEL, DIFF_MODEL, HALL_MODEL, SEP
 from .data import Dataset, DocumentEvolution, EvolutionModel, RefList, WordCount
 from .io_constants import (
     BOW_DIR,
@@ -25,12 +26,6 @@ from .utils import (
     create_language_list,
     create_logger,
 )
-
-DIFF_MODEL = "diff"
-HALL_MODEL = "hall"
-SEP = ":"
-ADD = "added"
-DEL = "removed"
 
 
 def _define_parser(parser: ArgumentParser) -> None:
@@ -124,7 +119,7 @@ def create_bow(
                 doc_freq.update(bow.keys())
             doc_evolution = DocumentEvolution(bows=[], refs=[])
             seen_blobs: Set[str] = set()
-            refs = input_dataset.refs[repo]
+            refs = input_dataset.refs_dict[repo]
             prev_bow = None
             for ref in refs:
                 file_info = input_dataset.files_info[repo][ref].get(file_path)
@@ -198,8 +193,8 @@ def create_bow(
 
     logger.info("Saving tagged refs ...")
     with open(refs_output_path, "w", encoding="utf-8") as fout:
-        for repo, repo_refs in input_dataset.refs.items():
-            for ref in repo_refs:
+        for repo, refs in input_dataset.refs_dict.items():
+            for ref in refs:
                 fout.write("%s%s%s\n" % (repo, SEP, ref))
     logger.info("Saved tagged refs in '%s'" % refs_output_path)
 

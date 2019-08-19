@@ -46,7 +46,7 @@ def merge(
         recursive_update(output_dataset.files_info, input_dataset.files_info)
         recursive_update(output_dataset.files_content, input_dataset.files_content)
 
-        for repo, refs in input_dataset.refs.items():
+        for repo, refs in input_dataset.refs_dict.items():
             if len(refs) > 1:
                 logger.warning(
                     "Found %d references for repository %s. Please make sure you "
@@ -54,11 +54,11 @@ def merge(
                     len(refs),
                     repo,
                 )
-            if repo not in output_dataset.refs:
+            if repo not in output_dataset.refs_dict:
                 logger.info("Adding new repository '%s' from '%s'.", repo, dataset_name)
-                output_dataset.refs[repo] = input_dataset.refs[repo]
+                output_dataset.refs_dict[repo] = input_dataset.refs_dict[repo]
             else:
-                if output_dataset.refs[repo] != input_dataset.refs[repo]:
+                if output_dataset.refs_dict[repo] != input_dataset.refs_dict[repo]:
                     logger.error(
                         "Discrepancy between references for repository '%s', data from "
                         "'%s' will not be added.",

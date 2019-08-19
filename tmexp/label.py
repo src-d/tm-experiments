@@ -3,15 +3,14 @@ from collections import defaultdict
 from enum import Enum
 from functools import partial
 import itertools
-import logging
 import os
-from typing import Callable, DefaultDict, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 
 from .cli import CLIBuilder, register_command
-from .create_bow import ADD, DEL, DIFF_MODEL, HALL_MODEL, SEP
-from .data import FileReducer, RefList, RefMapping, RepoMapping
+from .constants import DIFF_MODEL
+from .data import FileReducer, RepoMapping
 from .io_constants import (
     BOW_DIR,
     DOC_FILENAME,
@@ -22,9 +21,21 @@ from .io_constants import (
     VOCAB_FILENAME,
     WORDTOPIC_FILENAME,
 )
-from .utils import check_file_exists, check_range, check_remove, create_logger
-
-DOC = "doc"
+from .reduce import (
+    concat_reducer,
+    diff_to_hall_reducer,
+    last_ref_reducer,
+    max_reducer,
+    mean_reducer,
+    median_reducer,
+)
+from .utils import (
+    check_file_exists,
+    check_range,
+    check_remove,
+    create_logger,
+    load_refs_dict,
+)
 
 
 def _define_parser(parser: ArgumentParser) -> None:
@@ -73,137 +84,6 @@ def _define_parser(parser: ArgumentParser) -> None:
         type=Context.from_string,
         required=True,
     )
-
-
-def reduce_corpus(
-    corpus: np.ndarray,
-    logger: logging.Logger,
-    repo_mapping: RepoMapping,
-    refs: DefaultDict[str, RefList],
-    file_reducer: FileReducer,
-) -> np.ndarray:
-    new_corpus = np.zeros_like(corpus)
-    cur_doc_ind = -1
-    for repo, file_mapping in repo_mapping.items():
-        logger.info("\tProcessing repository '%s'", repo)
-        new_num_docs = 0
-        for ref_mapping in file_mapping.values():
-            num_added_docs = file_reducer(
-                corpus, new_corpus, refs[repo], ref_mapping, cur_doc_ind
-            )
-            new_num_docs += num_added_docs
-            cur_doc_ind += num_added_docs
-        logger.info("\tExtracted %d documents.", new_num_docs)
-    num_docs = cur_doc_ind + 1
-    return new_corpus[:num_docs]
-
-
-def diff_to_hall_reducer(
-    corpus: np.ndarray,
-    new_corpus: np.ndarray,
-    refs: RefList,
-    ref_mapping: RefMapping,
-    cur_doc_ind: int,
-) -> int:
-    cur_count: np.ndarray = np.zeros_like(corpus[0])
-    prev_add_doc, prev_del_doc = None, None
-    new_num_docs = 0
-    for ref in refs:
-        if ref not in ref_mapping:
-            continue
-        cur_add_doc = ref_mapping[ref].get(ADD)
-        cur_del_doc = ref_mapping[ref].get(DEL)
-
-        new_doc = cur_add_doc != prev_add_doc or cur_del_doc != prev_del_doc
-        if new_doc:
-            if cur_add_doc != prev_add_doc:
-                cur_count += corpus[cur_add_doc]
-                prev_add_doc = cur_add_doc
-            if cur_del_doc != prev_del_doc:
-                cur_count -= corpus[cur_del_doc]
-                prev_del_doc = cur_del_doc
-        if cur_count.any():
-            new_num_docs += int(new_doc)
-            new_corpus[cur_doc_ind + new_num_docs] = cur_count
-            ref_mapping[ref][DOC] = cur_doc_ind + new_num_docs
-    return new_num_docs
-
-
-def last_ref_reducer(
-    corpus: np.ndarray,
-    new_corpus: np.ndarray,
-    refs: RefList,
-    ref_mapping: RefMapping,
-    cur_doc_ind: int,
-) -> int:
-    if refs[-1] in ref_mapping and DOC in ref_mapping[refs[-1]]:
-        new_corpus[cur_doc_ind + 1] = corpus[ref_mapping[refs[-1]][DOC]]
-    return 1
-
-
-def numpy_op_reducer(
-    corpus: np.ndarray,
-    new_corpus: np.ndarray,
-    _: RefList,
-    ref_mapping: RefMapping,
-    cur_doc_ind: int,
-    numpy_op: Callable[..., np.ndarray],
-) -> int:
-    doc_inds = [
-        doc_mapping[DOC] for doc_mapping in ref_mapping.values() if DOC in doc_mapping
-    ]
-    new_corpus[cur_doc_ind + 1] = numpy_op(corpus[doc_inds], axis=0)
-    return 1
-
-
-def max_reducer(
-    corpus: np.ndarray,
-    new_corpus: np.ndarray,
-    refs: RefList,
-    ref_mapping: RefMapping,
-    cur_doc_ind: int,
-) -> int:
-    return numpy_op_reducer(corpus, new_corpus, refs, ref_mapping, cur_doc_ind, np.max)
-
-
-def mean_reducer(
-    corpus: np.ndarray,
-    new_corpus: np.ndarray,
-    refs: RefList,
-    ref_mapping: RefMapping,
-    cur_doc_ind: int,
-) -> int:
-    return numpy_op_reducer(corpus, new_corpus, refs, ref_mapping, cur_doc_ind, np.mean)
-
-
-def median_reducer(
-    corpus: np.ndarray,
-    new_corpus: np.ndarray,
-    refs: RefList,
-    ref_mapping: RefMapping,
-    cur_doc_ind: int,
-) -> int:
-    return numpy_op_reducer(
-        corpus, new_corpus, refs, ref_mapping, cur_doc_ind, np.median
-    )
-
-
-def concat_reducer(
-    corpus: np.ndarray,
-    new_corpus: np.ndarray,
-    refs: RefList,
-    ref_mapping: RefMapping,
-    cur_doc_ind: int,
-) -> int:
-    prev_doc = np.zeros_like(corpus[0])
-    empty_doc = np.zeros_like(corpus[0])
-    for ref in refs:
-        if ref not in ref_mapping or DOC not in ref_mapping[ref]:
-            continue
-        cur_doc = corpus[ref_mapping[ref][DOC]]
-        new_corpus[cur_doc_ind] += np.maximum(empty_doc, cur_doc - prev_doc)
-        prev_doc = cur_doc
-    return 1
 
 
 class Context(Enum):
@@ -263,65 +143,32 @@ def label(
 
     check_range(min_prob, "min-prob")
 
-    logger.info("Loading tagged refs ...")
-    with open(refs_input_path, "r", encoding="utf-8") as fin:
-        refs: DefaultDict[str, RefList] = defaultdict(RefList)
-        for line in fin:
-            repo, ref = line.split(SEP)
-            refs[repo].append(ref.replace("\n", ""))
-    logger.info("Loaded tagged refs:")
-    for repo, repo_refs in refs.items():
-        logger.info("\tRepository '%s': %d refs", repo, len(repo_refs))
-
-    logger.info("Loading document index ...")
-    with open(doc_input_path, "r", encoding="utf-8") as fin:
-        line = fin.readline()
-        if SEP + ADD in line or SEP + DEL in line:
-            topic_model = DIFF_MODEL
-        else:
-            topic_model = HALL_MODEL
-        fin.seek(0)
-        repo_mapping = RepoMapping()
-        for doc_ind, line in enumerate(fin):
-            doc_info = line.split()
-            if topic_model == HALL_MODEL:
-                repo, file_path, _ = doc_info[0].split(SEP)
-                delta_type = DOC
-            else:
-                repo, file_path, delta_type, _ = doc_info[0].split(SEP)
-            for ref in doc_info[1:]:
-                repo_mapping[repo][file_path][ref][delta_type] = doc_ind
-    logger.info("Loaded document index, detected %s topic model.", topic_model)
-
-    logger.info("Loading bags of words ...")
-    with open(docword_input_path, "r", encoding="utf-8") as fin:
-        num_docs = int(fin.readline())
-        num_words = int(fin.readline())
-        fin.readline()
-        corpus = np.zeros((num_docs, num_words))
-        for line in fin:
-            doc_id, word_id, count = map(int, line.split())
-            corpus[doc_id, word_id - 1] = count
-    logger.info("Loaded %d bags of words.", num_docs)
-
-    if topic_model == DIFF_MODEL:
-        logger.info("Recreating hall model corpus (we can't use delta-documents) ...")
-        corpus = reduce_corpus(corpus, logger, repo_mapping, refs, diff_to_hall_reducer)
-        num_docs = corpus.shape[0]
-        logger.info("Recreated hall model corpus, found %d documents ...", num_docs)
-
-    if context.reducer is not None:
-        logger.info("Creating %s context ...", str(context))
-        corpus = reduce_corpus(corpus, logger, repo_mapping, refs, context.reducer)
-        num_docs = corpus.shape[0]
-        logger.info("Created context, found %d documents ...", num_docs)
+    refs_dict = load_refs_dict(logger, refs_input_path)
 
     logger.info("Loading word index ...")
     with open(vocab_input_path, "r", encoding="utf-8") as fin:
         word_index: Dict[int, str] = {
             i: word.replace("\n", "") for i, word in enumerate(fin)
         }
+    num_words = len(word_index)
     logger.info("Loaded word index, found %d words.", num_words)
+
+    repo_mapping = RepoMapping()
+    repo_mapping.build(logger, doc_input_path)
+    corpus = repo_mapping.create_corpus(logger, docword_input_path)
+    if repo_mapping.topic_model == DIFF_MODEL:
+        logger.info("Recreating hall model corpus (we can't use delta-documents) ...")
+        corpus = repo_mapping.reduce_corpus(
+            corpus, logger, refs_dict, diff_to_hall_reducer
+        )
+        num_docs = corpus.shape[0]
+        logger.info("Recreated hall model corpus, found %d documents ...", num_docs)
+
+    if context.reducer is not None:
+        logger.info("Creating %s context ...", str(context))
+        corpus = repo_mapping.reduce_corpus(corpus, logger, refs_dict, context.reducer)
+        num_docs = corpus.shape[0]
+        logger.info("Created context, found %d documents ...", num_docs)
 
     logger.info("Loading word topic distributions ...")
     topic_words = np.load(wordtopic_input_path)
