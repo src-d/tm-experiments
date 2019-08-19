@@ -200,7 +200,7 @@ class RepoWordCounts(DefaultDict[str, RefWordCounts]):
         self.default_factory = RefWordCounts  # type: ignore
 
 
-class DocMembership(Dict[str, np.array]):
+class DocMembership(Dict[str, np.ndarray]):
     pass
 
 
@@ -214,3 +214,18 @@ class RepoMembership(DefaultDict[str, RefMembership]):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self.default_factory = RefMembership  # type: ignore
+
+
+# ------------------------------------------------------------------
+
+
+class Metric(Dict[str, np.ndarray]):
+    pass
+
+
+class Metrics(NamedTuple):
+    distinctness: np.ndarray
+    assignment: Metric
+    weight: Metric
+    scatter: Metric
+    focus: Metric
