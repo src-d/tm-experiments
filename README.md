@@ -48,7 +48,8 @@ data
             ├── doctopic.npy
             ├── wordtopic.npy
             ├── labels.txt
-            └── membership.pkl
+            ├── membership.pkl
+            └── metrics.pkl
 
 ```
 
@@ -161,3 +162,23 @@ docker run --rm -it -v /path/to/data:/data \
 ```
 
 Once this job is finished, the total word count output file should be located in ``/path/to/data/bows/my-diff-bow/` and the topic membership output file should be located in `/path/to/data/topics/my-diff-bow/my-artm-exp`.
+
+### `compute-metrics` command
+
+This command will compute metrics over the topic model from inputs created by the previous commands:
+- the **distinctness** between a pair of topics, which is defined as the Jensen–Shannon divergence between both word distributions. We also use this metric as our convergence metric for ARTM models. It gives a measure of the similarity - or lack thereof - between topics.
+- the **assignment** of a topic at a given version, which is defined as the mean of all membership values of the topic over all documents for that version. It gives a measure of the volume of documents related to the topic.
+- the **weight** of a topic at a given version, which is defined as the mean of all membership values of the topic over all documents for that version, weighted by the number of words in each document. It gives a measure of the volume of code related to the topic.
+- the **scatter** of a topic at a given version, which is defined as the entropy of the membership values of the topic for that version. It gives a measure of how spread out the topic is across documents.
+- the **focus** of a topic at a given version, which is defined as the proportion of documents of that version which have a membership value over 50 % for the given version in the documents they appear in. It gives a measure of how dominant the topic is in the documents where is is present.
+
+For more information about the selected metrics, you can check out [this paper](https://pdfs.semanticscholar.org/4207/bb755174247d1fc3d88762afa8f0fb16cc26.pdf).
+
+You can launch the computing with the following command:
+
+```
+docker run --rm -it -v /path/to/data:/data \
+  tmexp compute-metrics --bow-name my-diff-bow --exp-name my-artm-exp
+```
+
+Once this job is finished, the output file should be located in `/path/to/data/topics/my-diff-bow/my-artm-exp`.
