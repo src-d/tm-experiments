@@ -161,7 +161,8 @@ def load_refs_dict(logger: logging.Logger, input_path: str) -> RefsDict:
         for line in fin:
             repo, ref = line.split(SEP)
             refs_dict[repo].append(ref.replace("\n", ""))
-    logger.info("Loaded tagged refs:")
+    msg = "Loaded tagged refs:\n"
     for repo, refs in refs_dict.items():
-        logger.info("\tRepository '%s': %d refs", repo, len(refs))
+        msg += "\tRepository '%s': %d refs\n" % (repo, len(refs))
+    logger.info(msg)
     return refs_dict
