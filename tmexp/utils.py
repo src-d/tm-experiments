@@ -111,7 +111,7 @@ def check_remove(
                 raise RuntimeError("'%s' is a file or a link, aborting." % path)
             logger.warn("Directory '%s' already exists, removing it." % path)
             shutil.rmtree(path)
-        if is_symlink:
+        elif is_symlink:
             if not os.path.islink(path):
                 raise RuntimeError("'%s' is a directory or a file, aborting." % path)
             logger.warn("Symbolic link '%s' already exists, removing it." % path)
