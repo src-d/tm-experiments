@@ -39,18 +39,27 @@ data
 │       ├── vocab.bow_concat_tm.txt -> /data/bows/my-diff-bow/vocab.bow_tm.txt
 │       ├── vocab.bow_tm.txt
 │       └── wordcount.pkl
-└── topics
+├── topics
+│   └── my-diff-bow
+│       ├── my-hdp-exp
+│       │   ├── doctopic.npy
+│       │   └── wordtopic.npy
+│       └── my-artm-exp
+│           ├── doctopic.npy
+│           ├── wordtopic.npy
+│           ├── labels.txt
+│           ├── membership.pkl
+│           └── metrics.pkl
+└── visualisations
     └── my-diff-bow
-        ├── my-hdp-exp
-        │   ├── doctopic.npy
-        │   └── wordtopic.npy
         └── my-artm-exp
-            ├── doctopic.npy
-            ├── wordtopic.npy
-            ├── labels.txt
-            ├── membership.pkl
-            └── metrics.pkl
-
+            ├── heatmap_distinctness.png
+            ├── topic_1.png
+            ├── topic_2.png
+            ├── heatmap_assignment.png
+            ├── heatmap_weight.png
+            ├── heatmap_scatter.png
+            └── heatmap_focus.png
 ```
 
 For each commands we only specify the required arguments, check the optional ones with `docker run --rm -i tmexp $CMD --help`.
@@ -154,7 +163,7 @@ Once this job is finished, the output file should be located in `/path/to/data/t
 
 ### `postprocess` command
 
-This command will convert the corpus to the hall model if needed, then compute the total word count and topic assignment for each document, inputs that are needed to compute some of the metrics evaluating the quality of the topic model. You can launch the postprocessing with the following command:
+This command will convert the corpus to the hall model if needed, then compute the total word count and topic assignment for each document, inputs that are needed to compute some of the metrics evaluating the quality of the topic model. You can launch the postprocessing with the following command (don't forget to specify the bow and experience name):
 
 ```
 docker run --rm -it -v /path/to/data:/data \
@@ -174,7 +183,7 @@ This command will compute metrics over the topic model from inputs created by th
 
 For more information about the selected metrics, you can check out [this paper](https://pdfs.semanticscholar.org/4207/bb755174247d1fc3d88762afa8f0fb16cc26.pdf).
 
-You can launch the computing with the following command:
+You can launch the computing with the following command (don't forget to specify the bow and experience name):
 
 ```
 docker run --rm -it -v /path/to/data:/data \
@@ -182,3 +191,14 @@ docker run --rm -it -v /path/to/data:/data \
 ```
 
 Once this job is finished, the output file should be located in `/path/to/data/topics/my-diff-bow/my-artm-exp`.
+
+### `visualize` command
+
+This command will create visualizations for the metrics computed previously. If you built your topic model on a single repository, then it will create evolution plots of all metrics for each topic, as well as a heatmap per metric across references and topics. If you build your topic model on multiple repositories, it will assume you did so with only reference per repository, and well compute heatmaps per metric across repositories and topics. You can launch the creation with the following command (don't forget to specify the bow and experience name):
+
+```
+docker run --rm -it -v /path/to/data:/data \
+  tmexp visualize --bow-name my-diff-bow --exp-name my-artm-exp --max-topics 2
+```
+
+Once this job is finished, the output file should be located in `/path/to/data/visualisations/my-diff-bow/my-artm-exp`.
