@@ -36,7 +36,7 @@ setup(
     packages=find_packages(exclude=["tests"]),
     entry_points={"console_scripts": ["tmexp=tmexp.__main__:main"]},
     install_requires=[
-        "nltk==3.4.3",
+        "nltk==3.4.5",
         "pymysql==0.9.3",
         "bblfsh==3.1.1",
         "tqdm==4.32.2",
